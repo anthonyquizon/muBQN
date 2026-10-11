@@ -432,6 +432,7 @@ Gen ⇐ {
   }
 
   CallV ← {fc 𝕊 f‿w‿x: fc.Tmp "call("∾(Args f‿w‿x)∾")"}
+  Simple ← {(⊑𝕩) In "var"‿"field"‿"spec"‿"prim"}   # applying it emits one call at most
   Direct ← {fc 𝕊 name‿env‿w‿x: fc.Tmp name∾"("∾(Args env‿w‿x)∾")"}
 
   # Apply a function node to C arguments w (or "NONE") and x
@@ -479,7 +480,10 @@ Gen ⇐ {
       AF ← {fc Apply ⟨f, 𝕨, 𝕩⟩}
       {
         m ≡ ⟨"prim", '∘'⟩ ? "NONE" AF w AG x ;
-        m ≡ ⟨"prim", '○'⟩ ? gx ← "NONE" AG x ⋄ ("NONE"≡w) ◶ ⟨{𝕤⋄("NONE" AG w) AF gx}, {𝕤⋄"NONE" AF gx}⟩ @ ;
+        # 𝕨 F○G 𝕩 applies G twice: a simple G is called twice, anything
+        # else is evaluated once as a value
+        (m ≡ ⟨"prim", '○'⟩) ∧ ("NONE"≡w) ∨ Simple g ? gx ← "NONE" AG x ⋄ ("NONE"≡w) ◶ ⟨{𝕤⋄("NONE" AG w) AF gx}, {𝕤⋄"NONE" AF gx}⟩ @ ;
+        m ≡ ⟨"prim", '○'⟩ ? gv ← fc Val g ⋄ gx ← fc CallV gv‿"NONE"‿x ⋄ (fc CallV gv‿"NONE"‿w) AF gx ;
         m ≡ ⟨"prim", '⊸'⟩ ? l ← "NONE" AF ("NONE"≡w) ⊑ w‿x ⋄ l AG x ;
         m ≡ ⟨"prim", '⟜'⟩ ? r ← "NONE" AG x ⋄ (("NONE"≡w) ⊑ w‿x) AF r ;
         m ≡ ⟨"prim", '⊘'⟩ ? ("NONE"≡w) ◶ ⟨{𝕤⋄w AG x}, {𝕤⋄"NONE" AF x}⟩ @ ;
