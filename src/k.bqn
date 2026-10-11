@@ -144,3 +144,88 @@ _scan ⇐ {     # left to right, monadic only
 # where a structural function moves elements. Arithmetic on them fails.
 Markers ⇐ {"k.Markers: 𝕩 must be a natural number" Chk IsNat 𝕩 ⋄ {𝕩⋄{⇐}}¨↕𝕩}
 IsMarker ⇐ {6=•Type 𝕩}
+
+# ---- encodings. A list may be stored compressed; dialect code can ask how
+# and work on the parts directly. Like Flat, Enc is a hint: the name it
+# returns is an encoding the list really has, and "plain" is always correct.
+# Every other basis operation accepts any encoding.
+#
+#   "const"  v‿n      n copies of v
+#   "range"  s‿d‿n    s+d×↕n, integers only
+#   "runs"   v‿c      c/v; every count is at least 1, and neighbouring runs
+#                     may hold equal values
+#   "dict"   c‿d      c⊏d; d may hold repeats and entries no code uses
+#
+# Here lists are always plain, so Enc claims an encoding at random from those
+# the list could have, and Parts derives the parts with the freedom each
+# encoding allows (shuffled and padded dictionaries, split runs, any step for
+# a one-element range). Stats counts the parts taken and lists built.
+IsInt ← {1=•Type 𝕩 ? (𝕩=⌊𝕩) ∧ 9007199254740992>|𝕩 ; 0}
+encs ← "const"‿"range"‿"runs"‿"dict"
+taken ← 0¨ ↕2×≠encs
+Count1 ← {taken +↩ 𝕩 = ↕≠taken ⋄ @}
+Stats ⇐ {𝕤 ⋄ ⟨encs∾("Mk"∾⊢)¨encs, taken⟩}
+
+Can ← {   # encodings list 𝕩 could have
+  ¬IsList 𝕩 ? 0¨encs ;
+  c ← {0<≠𝕩 ? ∧´(⊑𝕩)⊸≡¨𝕩 ; 0} 𝕩
+  Ar ← {d ← (1↓𝕩)-¯1↓𝕩 ⋄ ∧´d=⊑d∾0}
+  r ← (0<≠𝕩) ∧ {∧´IsInt¨𝕩 ? Ar 𝕩 ; 0} 𝕩
+  c‿r‿1‿1
+}
+Enc ⇐ {(•rand.Range ≠o) ⊑ o ← (<"plain") ∾ (Can 𝕩)/encs}
+Parts ⇐ {
+  "k.Parts: unknown encoding" Chk ⊑(<𝕨) ∊ encs
+  e ← ⊑encs ⊐ <𝕨
+  ("k.Parts: 𝕩 is not "∾𝕨) Chk e ⊑ Can 𝕩
+  Count1 e
+  e ◶ ⟨
+    {⟨⊑𝕩, ≠𝕩⟩}
+    {⟨⊑𝕩, (1<≠𝕩) ◶ ⟨{𝕤⋄¯2+•rand.Range 5}, {(1⊑𝕩)-⊑𝕩}⟩ 𝕩, ≠𝕩⟩}
+    {   # runs, with some runs split in two
+      0=≠𝕩 ? ⟨⟨⟩, ⟨⟩⟩ ;
+      s ← / 1 ∾ ¬(1↓𝕩) ≡¨ ¯1↓𝕩
+      c ← (1↓s∾≠𝕩) - s
+      sp ← (c>1) ∧ 0=•rand.Range¨ 3¨c       # runs to split
+      a ← 1 + •rand.Range¨ 1⌈c-1             # length of the first part
+      Split ← {𝕊 s‿a‿c: s ? ⟨a, c-a⟩ ; 𝕊 s‿a‿c: ⟨c⟩}
+      ⟨(1+sp) / s ⊏ 𝕩, ∾ Split¨ <˘⍉> sp‿a‿c⟩
+    }
+    {   # dict: unique values, some repeated, some unused, in random order
+      u ← ⍷𝕩
+      extra ← ((•rand.Range 1+≠u) •rand.Subset ≠u) ⊏ u
+      junk ← (∧´ 1=•Type¨ 𝕩) ◶ ⟨⟨⟩, {𝕤 ⋄ 1000 + •rand.Range¨ 3⥊100}⟩ @
+      d ← u ∾ extra ∾ junk
+      d ↩ (•rand.Deal ≠d) ⊏ d
+      ⟨d ⊐ 𝕩, d⟩
+    }
+  ⟩ 𝕩
+}
+
+MkConst ⇐ {
+  v‿n ← 𝕩
+  "k.MkConst: n must be a natural number" Chk IsNat n
+  Count1 4 ⋄ n ⥊ <v
+}
+MkRange ⇐ {
+  s‿d‿n ← 𝕩
+  "k.MkRange: s and d must be integers" Chk (IsInt s) ∧ IsInt d
+  "k.MkRange: n must be a natural number" Chk IsNat n
+  "k.MkRange: elements must stay integers" Chk IsInt s + d × 0⌈n-1
+  Count1 5 ⋄ s + d × ↕n
+}
+MkRuns ⇐ {
+  v‿c ← 𝕩
+  "k.MkRuns: v and c must be lists of equal length" Chk (IsList v) ∧ (IsList c) ∧ v =○≠ c
+  "k.MkRuns: counts must be at least 1" Chk ∧´ (IsNat¨c) ∧ c≥1
+  Count1 6 ⋄ c / v
+}
+MkDict ⇐ {
+  c‿d ← 𝕩
+  "k.MkDict: d must be a list" Chk IsList d
+  "k.MkDict: codes must index d" Chk (IsFlat c) ∧ ∧´ (IsNat¨c) ∧ c<≠d
+  Count1 7 ⋄ c ⊏ d
+}
+
+# Sorted 𝕩: 1 only if 𝕩 is a list in ascending order. A hint, like Flat.
+Sorted ⇐ {(IsList 𝕩) ∧ (𝕩 ≡ ∧𝕩) ∧ 0<•rand.Range 4}

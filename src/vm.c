@@ -1,18 +1,23 @@
 // vm.c: muBQN. All hand-written C lives in this one file (see docs/design.md).
 //
 // Sections, in order:
-//   runtime      values, rc, reuse tokens
-//   kernels      plain (dst, src, n) loops; scalar fallbacks until Singeli
-//   basis        kernels as value-level operations with an ownership convention.
-//                C generated from the primitive dialect calls these.
-//   generated    #include "gen/*.c" goes here (none yet)
-//   interpreter  milestone 1
-//   main         -DPRIM_TEST builds the test harness instead
+//   runtime      errors, values, heap objects, reference counts, reuse tokens
+//   functions    function objects, calls, and the combinators ∘ ○ ⊸ ⟜ ˜ ˙ ⊘ ◶ ⍟
+//   arrays       construction, element access, comparison
+//   basis        the operations of src/k.bqn, as b_x(w, x) and bm_x(f, w, x)
+//   generated    gen/prims.c, compiled from src/prims.bqn by src/c.bqn
+//   interpreter  milestone 4
+//   main         -DPRIM_TEST builds the differential test harness instead
 //
-// Build: cc -std=c11 -Wall -O2 src/vm.c -o vm
-// Test:  cc -std=c11 -Wall -O2 -DPRIM_TEST src/vm.c -o vm-test && ./vm-test
+// Milestone 1: generated code does no reference counting, so nothing is freed
+// and no basis operation writes into its arguments.
+//
+// Build: cc -std=c11 -O2 src/vm.c -o vm -lm
+// Test:  bqn test/emit.bqn
 
 #include <math.h>
+#include <setjmp.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,35 +27,55 @@
 // all of them yet.
 #pragma GCC diagnostic ignored "-Wunused-function"
 
-static void die(const char *msg) { fprintf(stderr, "vm: %s\n", msg); exit(1); }
-
 // ===================================================================== runtime
 
+// ---- errors. With a handler set (the test harness), an error longjmps to
+// it; otherwise it ends the process.
+static jmp_buf *err_jmp;
+static char err_msg[512];
+_Noreturn static void vm_error(const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(err_msg, sizeof err_msg, fmt, ap);
+  va_end(ap);
+  if (err_jmp) longjmp(*err_jmp, 1);
+  fprintf(stderr, "vm: %s\n", err_msg);
+  exit(1);
+}
+
 // ---- values: NaN-boxed. Numbers are plain doubles (NaNs canonicalised);
-// heap pointers live in a negative quiet-NaN space above every real double.
+// pointers, characters and NONE live in negative quiet-NaN space above every
+// real double.
 typedef uint64_t V;
 #define TAG_MASK 0xFFFF000000000000ull
 #define TAG_PTR  0xFFF9000000000000ull
-#define NOTOK    TAG_PTR  // null pointer: "no reuse token"
+#define TAG_CHR  0xFFFA000000000000ull
+#define NONE     0xFFFB000000000000ull   // no left argument
+#define NOTOK    TAG_PTR                 // null pointer: "no reuse token"
 
 static inline int is_num(V v) { return v < TAG_PTR; }
 static inline int is_ptr(V v) { return (v & TAG_MASK) == TAG_PTR; }
+static inline int is_chr(V v) { return (v & TAG_MASK) == TAG_CHR; }
 static inline double num(V v) { double d; memcpy(&d, &v, 8); return d; }
+static inline uint32_t chr(V v) { return (uint32_t)v; }
 static inline V mk_num(double d) {
   if (d != d) return 0x7FF8000000000000ull;
   V v; memcpy(&v, &d, 8); return v;
 }
+static inline V mk_chr(uint32_t c) { return TAG_CHR | c; }
+#define N(d) mk_num(d)
+#define C(c) mk_chr(c)
 
 // ---- heap objects: header, then shape[rank], then len 8-byte elements.
-// T_F64 elements are doubles, T_VAL elements are V; both are 8 bytes, and a
-// number's V bits are its double bits, so copying code treats them alike.
-enum { T_F64, T_VAL, T_TOK };
-enum { F_STATIC = 1 };  // static slots and constants: never reference counted
+// T_F64 elements are doubles, T_VAL elements are V; a number's V bits are its
+// double bits, so copying code treats them alike.
+enum { T_F64, T_VAL, T_FN, T_MARK, T_TOK };
+enum { F_STATIC = 1 };  // static objects: never reference counted
 
 typedef struct H {
   int32_t rc;
   uint8_t type, rank, flags, _pad;
-  uint64_t len;  // element count
+  uint64_t len;  // element count (environment size for T_FN)
   uint64_t cap;  // block size in bytes, for reuse
 } H;
 
@@ -60,8 +85,10 @@ static inline uint64_t *shp(H *h) { return (uint64_t *)(h + 1); }
 static inline V *vals(H *h) { return (V *)(shp(h) + h->rank); }
 static inline double *f64s(H *h) { return (double *)(shp(h) + h->rank); }
 static inline int unique(H *h) { return h->rc == 1 && !(h->flags & F_STATIC); }
+static inline int is_type(V v, int t) { return is_ptr(v) && ptr(v)->type == t; }
+static inline int is_arr(V v) { return is_type(v, T_F64) || is_type(v, T_VAL); }
 
-static long live_objs;  // must be 0 at exit
+static long live_objs;  // must be 0 at exit once reference counting is on
 static long reused;     // stats: blocks recycled through reuse tokens
 
 static void h_free(H *h);
@@ -78,7 +105,7 @@ static inline void v_drop(V v) {
 }
 
 static void h_drop_children(H *h) {
-  if (h->type == T_VAL)
+  if (h->type == T_VAL || h->type == T_FN)
     for (uint64_t i = 0; i < h->len; i++) v_drop(vals(h)[i]);
 }
 static void h_free(H *h) { h_drop_children(h); live_objs--; free(h); }
@@ -86,20 +113,10 @@ static void h_free(H *h) { h_drop_children(h); live_objs--; free(h); }
 static H *h_alloc(uint8_t type, uint8_t rank, uint64_t len) {
   size_t bytes = sizeof(H) + (rank + len) * 8;
   H *h = malloc(bytes);
-  if (!h) die("out of memory");
+  if (!h) vm_error("out of memory");
   *h = (H){.rc = 1, .type = type, .rank = rank, .len = len, .cap = bytes};
   live_objs++;
   return h;
-}
-static H *h_list(uint8_t type, uint64_t n) {
-  H *h = h_alloc(type, 1, n);
-  shp(h)[0] = n;
-  return h;
-}
-static H *h_like(H *a) {  // fresh array with a's type and shape
-  H *r = h_alloc(a->type, a->rank, a->len);
-  memcpy(shp(r), shp(a), a->rank * 8);
-  return r;
 }
 
 // ---- reuse tokens. drop_reuse consumes v; if it held the only reference,
@@ -128,269 +145,692 @@ static H *alloc_at(V tok, uint8_t type, uint8_t rank, uint64_t len) {
   return h_alloc(type, rank, len);
 }
 
-// ===================================================================== kernels
-// Kernels know nothing about BQN values. Each must be correct when dst aliases
-// an input, so the basis can write into a unique argument's buffer.
+// =================================================================== functions
 
-#define K_ARITH(name, OP)                                                     \
-  static void k_##name##_vv(double *d, const double *a, const double *b,     \
-                            uint64_t n) {                                     \
-    for (uint64_t i = 0; i < n; i++) d[i] = a[i] OP b[i];                     \
-  }                                                                           \
-  static void k_##name##_vs(double *d, const double *a, double b,            \
-                            uint64_t n) {                                     \
-    for (uint64_t i = 0; i < n; i++) d[i] = a[i] OP b;                        \
-  }                                                                           \
-  static void k_##name##_sv(double *d, double a, const double *b,            \
-                            uint64_t n) {                                     \
-    for (uint64_t i = 0; i < n; i++) d[i] = a OP b[i];                        \
-  }
-K_ARITH(add, +)
-K_ARITH(sub, -)
-K_ARITH(mul, *)
-#undef K_ARITH
+// A function object holds a C function and an environment: captured values
+// for a block, operands for a derived function. Data called as a function
+// returns itself, as in BQN.
+typedef V (*FnP)(V *e, V w, V x);
+typedef struct { H h; FnP fn; } FnH;
+static inline V *env(H *h) { return (V *)((FnH *)h + 1); }
 
-static void k_range(double *d, uint64_t n) {
-  for (uint64_t i = 0; i < n; i++) d[i] = (double)i;
+static V mk_fn(FnP f, int n, ...) {
+  FnH *o = malloc(sizeof(FnH) + n * 8);
+  if (!o) vm_error("out of memory");
+  o->h = (H){.rc = 1, .type = T_FN, .len = n, .cap = sizeof(FnH) + n * 8};
+  o->fn = f;
+  live_objs++;
+  va_list ap;
+  va_start(ap, n);
+  for (int i = 0; i < n; i++) env(&o->h)[i] = va_arg(ap, V);
+  va_end(ap);
+  return mk_ptr(&o->h);
+}
+static V fn_static(FnP f) {
+  V v = mk_fn(f, 0);
+  ptr(v)->flags |= F_STATIC;
+  live_objs--;
+  return v;
+}
+static V call(V f, V w, V x) {
+  if (!is_type(f, T_FN)) return f;
+  return ((FnH *)ptr(f))->fn(env(ptr(f)), w, x);
+}
+#define OR_X(w, x) ((w) == NONE ? (x) : (w))
+
+static V D_atop(V *e, V w, V x) { return call(e[0], NONE, call(e[1], w, x)); }
+static V D_fork(V *e, V w, V x) {
+  V r = call(e[2], w, x);
+  V l = call(e[0], w, x);
+  return call(e[1], l, r);
+}
+static V D_atop2(V *e, V w, V x) { return call(e[0], NONE, call(e[1], w, x)); }  // ∘
+static V D_over(V *e, V w, V x) {                                               // ○
+  V gx = call(e[1], NONE, x);
+  return call(e[0], w == NONE ? NONE : call(e[1], NONE, w), gx);
+}
+static V D_before(V *e, V w, V x) { return call(e[1], call(e[0], NONE, OR_X(w, x)), x); }  // ⊸
+static V D_after(V *e, V w, V x) { return call(e[0], OR_X(w, x), call(e[1], NONE, x)); }   // ⟜
+static V D_swap(V *e, V w, V x) { return call(e[0], x, OR_X(w, x)); }                      // ˜
+static V D_const(V *e, V w, V x) { (void)w; (void)x; return e[0]; }                        // ˙
+static V D_valences(V *e, V w, V x) { return w == NONE ? call(e[0], NONE, x) : call(e[1], w, x); }  // ⊘
+static V list_get(V a, uint64_t i);
+static uint64_t count(H *h);
+static V D_choose(V *e, V w, V x) {                                             // ◶
+  V i = call(e[0], w, x);
+  if (!is_num(i) || !is_arr(e[1])) vm_error("◶: 𝔽 must give an index into the list 𝕘");
+  double d = num(i);
+  if (d != floor(d) || d < 0 || d >= (double)count(ptr(e[1]))) vm_error("◶: index out of range");
+  return call(list_get(e[1], (uint64_t)d), w, x);
+}
+static V D_repeat(V *e, V w, V x) {                                             // ⍟ with a natural count
+  V n = call(e[1], w, x);
+  if (!is_num(n) || num(n) < 0 || num(n) != floor(num(n))) vm_error("⍟: only natural repetition counts are supported");
+  for (double i = 0; i < num(n); i++) x = call(e[0], w, x);
+  return x;
+}
+static V F_right(V *e, V w, V x) { (void)e; (void)w; return x; }
+static V F_left(V *e, V w, V x) { (void)e; return OR_X(w, x); }
+static V p_assert(V w, V x);
+static V F_assert(V *e, V w, V x) { (void)e; return p_assert(w, x); }
+static V P_right, P_left, P_assert;
+
+// ====================================================================== arrays
+
+static uint64_t count(H *h) {
+  uint64_t n = 1;
+  for (int i = 0; i < h->rank; i++) n *= shp(h)[i];
+  return n;
+}
+static H *new_arr(uint8_t type, uint8_t rank, const uint64_t *shape) {
+  uint64_t n = 1;
+  for (int i = 0; i < rank; i++) n *= shape[i];
+  H *h = h_alloc(type, rank, n);
+  memcpy(shp(h), shape, rank * 8);
+  return h;
+}
+static H *new_list(uint8_t type, uint64_t n) { return new_arr(type, 1, &n); }
+static V elem(H *h, uint64_t i) {
+  return h->type == T_F64 ? mk_num(f64s(h)[i]) : vals(h)[i];
+}
+static V list_get(V a, uint64_t i) {
+  if (!is_arr(a) || i >= ptr(a)->len) vm_error("index out of range");
+  return elem(ptr(a), i);
+}
+// T_VAL array whose elements are all numbers → T_F64, in place
+static V squeeze(H *h) {
+  if (h->type != T_VAL) return mk_ptr(h);
+  for (uint64_t i = 0; i < h->len; i++) if (!is_num(vals(h)[i])) return mk_ptr(h);
+  h->type = T_F64;
+  for (uint64_t i = 0; i < h->len; i++) f64s(h)[i] = num(vals(h)[i]);
+  return mk_ptr(h);
+}
+static V mk_list(int n, const V *xs) {
+  H *h = new_list(T_VAL, n);
+  if (n) memcpy(vals(h), xs, n * 8);
+  return squeeze(h);
+}
+static void need_list(V a, int n) {
+  if (!is_arr(a) || ptr(a)->rank != 1 || ptr(a)->len != (uint64_t)n)
+    vm_error("destructuring needs a list of %d elements", n);
+}
+static V str_lit(const uint32_t *cs, uint64_t n) {
+  H *h = new_list(T_VAL, n);
+  for (uint64_t i = 0; i < n; i++) vals(h)[i] = mk_chr(cs[i]);
+  return mk_ptr(h);
+}
+static int truth(V v) {
+  if (v == N(0)) return 0;
+  if (v == N(1)) return 1;
+  vm_error("Expected boolean");
+}
+static V vm_nomatch(void) { vm_error("No header matched arguments"); }
+static V p_assert(V w, V x) {
+  if (x == N(1)) return x;
+  if (w == NONE) vm_error("Assertion error");
+  char buf[256]; size_t k = 0;
+  if (is_arr(w))
+    for (uint64_t i = 0; i < ptr(w)->len && k + 4 < sizeof buf; i++) {
+      V c = elem(ptr(w), i);
+      uint32_t u = is_chr(c) ? chr(c) : '?';
+      if (u < 0x80) buf[k++] = (char)u;
+      else if (u < 0x800) { buf[k++] = 0xC0 | u >> 6; buf[k++] = 0x80 | (u & 63); }
+      else if (u < 0x10000) { buf[k++] = 0xE0 | u >> 12; buf[k++] = 0x80 | (u >> 6 & 63); buf[k++] = 0x80 | (u & 63); }
+      else { buf[k++] = 0xF0 | u >> 18; buf[k++] = 0x80 | (u >> 12 & 63); buf[k++] = 0x80 | (u >> 6 & 63); buf[k++] = 0x80 | (u & 63); }
+    }
+  buf[k] = 0;
+  vm_error("%s", buf);
 }
 
-// d[i] = s[idx[i]], negative indices counting from the end. Indices must
-// already be checked. Copies 8-byte elements, so it serves T_F64 and T_VAL.
-static void k_gather(uint64_t *d, const double *idx, const uint64_t *s,
-                     uint64_t len, uint64_t n) {
-  for (uint64_t i = 0; i < n; i++) {
-    double j = idx[i];
-    d[i] = s[(uint64_t)(j < 0 ? j + (double)len : j)];
+// ≡: numbers by value (so NaN doesn't match itself, as in CBQN), characters
+// by code, arrays by shape and elements, anything else by identity
+static int match(V a, V b) {
+  if (is_num(a) || is_num(b)) return is_num(a) && is_num(b) && num(a) == num(b);
+  if (!is_arr(a) || !is_arr(b)) return a == b;
+  H *x = ptr(a), *y = ptr(b);
+  if (x->rank != y->rank || memcmp(shp(x), shp(y), x->rank * 8)) return 0;
+  for (uint64_t i = 0; i < x->len; i++) if (!match(elem(x, i), elem(y, i))) return 0;
+  return 1;
+}
+// BQN's total order: numbers (NaN last), then characters; arrays compare by
+// ravel, then by length, rank and shape; an atom is a unit array that comes
+// before an equal array
+static int cmp(V a, V b) {
+  int aa = is_arr(a), ba = is_arr(b);
+  if (!aa && !ba) {
+    int ta = is_num(a) ? 0 : is_chr(a) ? 1 : 2, tb = is_num(b) ? 0 : is_chr(b) ? 1 : 2;
+    if (ta != tb) return ta < tb ? -1 : 1;
+    if (ta == 0) {
+      double x = num(a), y = num(b);
+      if (x != x || y != y) return (x != x) - (y != y);
+      return (x > y) - (x < y);
+    }
+    if (ta == 1) return (chr(a) > chr(b)) - (chr(a) < chr(b));
+    return (a > b) - (a < b);
   }
+  uint64_t na = aa ? ptr(a)->len : 1, nb = ba ? ptr(b)->len : 1;
+  for (uint64_t i = 0; i < na && i < nb; i++) {
+    int c = cmp(aa ? elem(ptr(a), i) : a, ba ? elem(ptr(b), i) : b);
+    if (c) return c;
+  }
+  if (na != nb) return na < nb ? -1 : 1;
+  int ra = aa ? ptr(a)->rank : 0, rb = ba ? ptr(b)->rank : 0;
+  if (ra != rb) return ra < rb ? -1 : 1;
+  for (int i = 0; i < ra; i++)
+    if (shp(ptr(a))[i] != shp(ptr(b))[i]) return shp(ptr(a))[i] < shp(ptr(b))[i] ? -1 : 1;
+  return 0;
 }
 
 // ======================================================================= basis
-// Lists only (rank ≤ 1 arguments) unless a comment says otherwise. Each
-// function states, per argument, whether it consumes or borrows.
+// The operations of src/k.bqn, with the same contracts. Each checks its
+// arguments and calls vm_error when they don't hold. w is NONE for monadic
+// calls. Results never share memory with arguments.
 
-static H *as_f64(V v, const char *nm) {
-  if (!is_ptr(v) || ptr(v)->type != T_F64) {
-    fprintf(stderr, "vm: %s: ", nm);
-    die("expected numbers");
-  }
+static H *need_arr(V v, const char *who) {
+  if (!is_arr(v)) vm_error("%s: 𝕩 must be an array", who);
   return ptr(v);
 }
-static int same_shape(H *a, H *b) {
-  return a->rank == b->rank && !memcmp(shp(a), shp(b), a->rank * 8);
+static H *need_list1(V v, const char *who) {
+  if (!is_arr(v) || ptr(v)->rank != 1) vm_error("%s: argument must be a list", who);
+  return ptr(v);
 }
-
-// ≠𝕩: borrows x
-static V b_len(V x) {
-  return mk_num(is_ptr(x) && ptr(x)->rank ? (double)shp(ptr(x))[0] : 1);
+static int is_flat(V v) {
+  if (!is_arr(v) || ptr(v)->rank != 1) return 0;
+  H *h = ptr(v);
+  if (h->type == T_F64) return 1;
+  for (uint64_t i = 0; i < h->len; i++) if (!is_num(vals(h)[i])) return 0;
+  return 1;
 }
-
-// ↕𝕩: consumes x (a number)
-static V b_range(V x) {
-  double n = num(x);
-  if (!is_num(x) || n < 0 || n != floor(n) || n > 9007199254740992.0)
-    die("↕: 𝕩 must be a natural number");
-  H *r = h_list(T_F64, (uint64_t)n);
-  k_range(f64s(r), r->len);
+static double nat(V v, const char *who) {
+  if (!is_num(v) || num(v) < 0 || num(v) != floor(num(v)) || num(v) > 9007199254740992.0)
+    vm_error("%s: expected a natural number", who);
+  return num(v);
+}
+static int is_int(V v) { return is_num(v) && num(v) == floor(num(v)) && fabs(num(v)) < 9007199254740992.0; }
+static V copy_list(H *src, uint64_t from, uint64_t n) {
+  H *r = new_list(src->type, n);
+  memcpy(vals(r), vals(src) + from, n * 8);
   return mk_ptr(r);
 }
 
-// 𝕨+𝕩, 𝕨-𝕩, 𝕨×𝕩: consume w and x. The result goes into a unique argument's
-// buffer when there is one.
-typedef void Kvv(double *, const double *, const double *, uint64_t);
-typedef void Kvs(double *, const double *, double, uint64_t);
-typedef void Ksv(double *, double, const double *, uint64_t);
-
-static inline V arith(V w, V x, const char *nm, Kvv *vv, Kvs *vs, Ksv *sv) {
-  if (is_num(w) && is_num(x)) {
-    double a = num(w), b = num(x);
-    double d; vv(&d, &a, &b, 1);
-    return mk_num(d);
-  }
-  if (is_num(w) || is_num(x)) {
-    V arr = is_num(w) ? x : w;
-    H *a = as_f64(arr, nm);
-    H *r = unique(a) ? a : h_like(a);
-    if (is_num(w)) sv(f64s(r), num(w), f64s(a), a->len);
-    else           vs(f64s(r), f64s(a), num(x), a->len);
-    if (r != a) v_drop(arr);
-    return mk_ptr(r);
-  }
-  H *a = as_f64(w, nm), *b = as_f64(x, nm);
-  if (!same_shape(a, b)) {
-    fprintf(stderr, "vm: %s: ", nm);
-    die("shape mismatch");
-  }
-  H *r = unique(a) ? a : unique(b) ? b : h_like(a);
-  vv(f64s(r), f64s(a), f64s(b), a->len);
-  if (r != a) v_drop(w);
-  if (r != b) v_drop(x);
+// ---- queries
+static V b_isarr(V w, V x) { (void)w; return N(is_arr(x)); }
+static V b_shape(V w, V x) {
+  (void)w;
+  if (!is_arr(x)) return mk_list(0, NULL);
+  H *h = ptr(x), *r = new_list(T_F64, h->rank);
+  for (int i = 0; i < h->rank; i++) f64s(r)[i] = (double)shp(h)[i];
   return mk_ptr(r);
 }
-static V b_add(V w, V x) { return arith(w, x, "+", k_add_vv, k_add_vs, k_add_sv); }
-static V b_sub(V w, V x) { return arith(w, x, "-", k_sub_vv, k_sub_vs, k_sub_sv); }
-static V b_mul(V w, V x) { return arith(w, x, "×", k_mul_vv, k_mul_vs, k_mul_sv); }
+static V b_len(V w, V x) {
+  (void)w;
+  return N(is_arr(x) && ptr(x)->rank ? (double)shp(ptr(x))[0] : 1);
+}
+static V b_count(V w, V x) { (void)w; return N(is_arr(x) ? (double)ptr(x)->len : 1); }
+static V b_type(V w, V x) {
+  (void)w;
+  return N(is_arr(x) ? 0 : is_num(x) ? 1 : is_chr(x) ? 2 : is_type(x, T_FN) ? 3 : 6);
+}
+static V b_flat(V w, V x) { (void)w; return N(is_arr(x) && ptr(x)->rank == 1 && ptr(x)->type == T_F64); }
+static V fill_of(V v) {
+  if (is_num(v)) return N(0);
+  if (is_chr(v)) return C(' ');
+  if (!is_arr(v)) vm_error("k.Fill: no fill for this element");
+  H *h = ptr(v), *r = new_arr(T_VAL, h->rank, shp(h));
+  for (uint64_t i = 0; i < h->len; i++) vals(r)[i] = fill_of(elem(h, i));
+  return squeeze(r);
+}
+static V b_fill(V w, V x) {
+  (void)w;
+  H *h = need_list1(x, "k.Fill");
+  if (h->type == T_F64) return N(0);
+  if (!h->len) vm_error("k.Fill: an empty generic list has no known fill");
+  return fill_of(vals(h)[0]);
+}
+static V b_same(V w, V x) { return N(match(w, x)); }
+static V b_match(V w, V x) { return N(match(w, x)); }
 
-// 𝕨⊏𝕩: consumes w, borrows x. 𝕩 must be a list; 𝕨 may have any shape and
-// gives the result its shape. Writes into w's block when w is unique.
-static V b_select(V w, V x) {
-  if (!is_ptr(x) || ptr(x)->rank != 1) die("⊏: 𝕩 must be a list");
-  H *s = ptr(x);
-  uint64_t len = s->len;
-  int atom = is_num(w);
-  double wn = atom ? num(w) : 0;
-  H *a = atom ? NULL : as_f64(w, "⊏");
-  const double *idx = atom ? &wn : f64s(a);
-  uint64_t n = atom ? 1 : a->len;
+// ---- construction
+static V b_reshape(V w, V x) {
+  H *s = need_list1(w, "k.Reshape"), *d = need_list1(x, "k.Reshape");
+  if (s->len > 255) vm_error("k.Reshape: rank too large");
+  uint64_t shape[256], n = 1;
+  for (uint64_t i = 0; i < s->len; i++) { shape[i] = (uint64_t)nat(elem(s, i), "k.Reshape"); n *= shape[i]; }
+  if (n != d->len) vm_error("k.Reshape: 𝕩 must have exactly ×´𝕨 elements");
+  H *r = new_arr(d->type, (uint8_t)s->len, shape);
+  memcpy(vals(r), vals(d), n * 8);
+  return mk_ptr(r);
+}
+static V b_deshape(V w, V x) {
+  (void)w;
+  H *h = need_arr(x, "k.Deshape");
+  return copy_list(h, 0, h->len);
+}
+static V b_range(V w, V x) {
+  (void)w;
+  uint64_t n = (uint64_t)nat(x, "k.Range");
+  H *r = new_list(T_F64, n);
+  for (uint64_t i = 0; i < n; i++) f64s(r)[i] = (double)i;
+  return mk_ptr(r);
+}
+static V b_cat(V w, V x) {
+  (void)w;
+  H *h = need_list1(x, "k.Cat");
+  uint64_t n = 0; int all_f64 = 1;
+  for (uint64_t i = 0; i < h->len; i++) {
+    H *p = need_list1(elem(h, i), "k.Cat");
+    n += p->len; all_f64 &= p->type == T_F64;
+  }
+  H *r = new_list(all_f64 ? T_F64 : T_VAL, n);
+  uint64_t k = 0;
+  for (uint64_t i = 0; i < h->len; i++) {
+    H *p = ptr(elem(h, i));
+    for (uint64_t j = 0; j < p->len; j++, k++) {
+      if (all_f64) f64s(r)[k] = f64s(p)[j];
+      else vals(r)[k] = elem(p, j);
+    }
+  }
+  return mk_ptr(r);
+}
+static V b_slice(V w, V x) {
+  need_list(w, 2);
+  H *h = need_list1(x, "k.Slice");
+  uint64_t s = (uint64_t)nat(list_get(w, 0), "k.Slice"), l = (uint64_t)nat(list_get(w, 1), "k.Slice");
+  if (s + l > h->len) vm_error("k.Slice: out of range");
+  return copy_list(h, s, l);
+}
+static uint64_t index_into(V i, uint64_t len, const char *who) {
+  if (!is_int(i)) vm_error("%s: index must be an integer", who);
+  double d = num(i);
+  if (d < -(double)len || d >= (double)len) vm_error("%s: index out of bounds", who);
+  return (uint64_t)(d < 0 ? d + (double)len : d);
+}
+static V b_pick(V w, V x) {
+  H *h = need_list1(x, "k.Pick");
+  return elem(h, index_into(w, h->len, "k.Pick"));
+}
+
+// ---- arithmetic on numbers and flat lists
+enum { O_ADD, O_SUB, O_MUL, O_DIV, O_MOD, O_MIN, O_MAX, O_EQ, O_NE, O_LT, O_LE, O_GT, O_GE };
+static inline double op2(int op, double a, double b) {
+  switch (op) {
+    case O_ADD: return a + b;
+    case O_SUB: return a - b;
+    case O_MUL: return a * b;
+    case O_DIV: return a / b;
+    case O_MOD: {                              // 𝕨|𝕩, rounding as CBQN does
+      double r = fmod(b, a);
+      return r != 0 && (r < 0) != (a < 0) ? r + a : r;
+    }
+    case O_MIN: return a < b ? a : b;
+    case O_MAX: return a > b ? a : b;
+    case O_EQ: return a == b;
+    case O_NE: return a != b;
+    case O_LT: return a < b;
+    case O_LE: return a <= b;
+    case O_GT: return a > b;
+    default: return a >= b;
+  }
+}
+static V arith(int op, V w, V x) {
+  if (is_num(w) && is_num(x)) return N(op2(op, num(w), num(x)));
+  if (!(is_num(w) || is_flat(w)) || !(is_num(x) || is_flat(x))) vm_error("k: arithmetic on non-numbers");
+  uint64_t n = is_num(w) ? ptr(x)->len : ptr(w)->len;
+  if (!is_num(w) && !is_num(x) && ptr(x)->len != n) vm_error("k: length mismatch");
+  H *r = new_list(T_F64, n);
+  double *d = f64s(r);
   for (uint64_t i = 0; i < n; i++) {
-    double j = idx[i];
-    if (j != floor(j) || j < -(double)len || j >= (double)len)
-      die("⊏: index out of bounds");
+    double a = is_num(w) ? num(w) : num(elem(ptr(w), i));
+    double b = is_num(x) ? num(x) : num(elem(ptr(x), i));
+    d[i] = op2(op, a, b);
   }
-  H *r;
-  if (atom) r = h_alloc(s->type, 0, 1);
-  else if (unique(a)) { r = a; r->type = s->type; }
-  else r = h_like(a), r->type = s->type;
-  k_gather((uint64_t *)vals(r), idx, (const uint64_t *)vals(s), len, n);
-  if (r->type == T_VAL)
-    for (uint64_t i = 0; i < n; i++) v_dup(vals(r)[i]);
-  if (!atom && r != a) v_drop(w);
+  return mk_ptr(r);
+}
+#define ARITH(name, op) static V b_##name(V w, V x) { return arith(op, w, x); }
+ARITH(add, O_ADD) ARITH(sub, O_SUB) ARITH(mul, O_MUL) ARITH(div, O_DIV) ARITH(mod, O_MOD)
+ARITH(min, O_MIN) ARITH(max, O_MAX) ARITH(eq, O_EQ) ARITH(ne, O_NE)
+ARITH(lt, O_LT) ARITH(le, O_LE) ARITH(gt, O_GT) ARITH(ge, O_GE)
+#undef ARITH
+static V arith1(double (*f)(double), V x) {
+  if (is_num(x)) return N(f(num(x)));
+  if (!is_flat(x)) vm_error("k: arithmetic on non-numbers");
+  H *h = ptr(x), *r = new_list(T_F64, h->len);
+  for (uint64_t i = 0; i < h->len; i++) f64s(r)[i] = f(num(elem(h, i)));
+  return mk_ptr(r);
+}
+static V b_floor(V w, V x) { (void)w; return arith1(floor, x); }
+static V b_abs(V w, V x) { (void)w; return arith1(fabs, x); }
+
+// ---- folds (right to left, as BQN's ´) and scans over flat lists
+static H *need_flat(V x, const char *who) {
+  if (!is_flat(x)) vm_error("%s: needs a flat list", who);
+  return ptr(x);
+}
+#define FOLD(name, init, OP)                                                   \
+  static V b_##name(V w, V x) {                                                \
+    (void)w;                                                                   \
+    H *h = need_flat(x, "k." #name);                                           \
+    if (!h->len) return N(init);                                               \
+    double a = num(elem(h, h->len - 1));                                       \
+    for (uint64_t i = h->len - 1; i-- > 0;) { double b = num(elem(h, i)); a = OP; } \
+    return N(a);                                                               \
+  }
+FOLD(foldadd, 0, b + a)
+FOLD(foldmul, 1, b * a)
+FOLD(foldmax, -INFINITY, (b > a ? b : a))
+FOLD(foldmin, INFINITY, (b < a ? b : a))
+#undef FOLD
+static V scan(int max, V x) {
+  H *h = need_flat(x, "k.Scan"), *r = new_list(T_F64, h->len);
+  for (uint64_t i = 0; i < h->len; i++) {
+    double b = num(elem(h, i));
+    f64s(r)[i] = i == 0 ? b : max ? (f64s(r)[i-1] > b ? f64s(r)[i-1] : b) : f64s(r)[i-1] + b;
+  }
+  return mk_ptr(r);
+}
+static V b_scanadd(V w, V x) { (void)w; return scan(0, x); }
+static V b_scanmax(V w, V x) { (void)w; return scan(1, x); }
+
+// ---- selection
+static V b_gather(V w, V x) {
+  if (!is_flat(w)) vm_error("k.Gather: 𝕨 must be a flat list");
+  H *ix = ptr(w), *s = need_list1(x, "k.Gather"), *r = new_list(s->type, ix->len);
+  for (uint64_t i = 0; i < ix->len; i++)
+    vals(r)[i] = vals(s)[index_into(elem(ix, i), s->len, "k.Gather")];
+  return mk_ptr(r);
+}
+static V b_scatter(V w, V x) {
+  need_list(w, 2);
+  V iv = list_get(w, 0), vv = list_get(w, 1);
+  H *s = need_list1(x, "k.Scatter");
+  if (!is_flat(iv)) vm_error("k.Scatter: indices must be a flat list");
+  H *ix = ptr(iv), *v = need_list1(vv, "k.Scatter");
+  if (ix->len != v->len) vm_error("k.Scatter: indices and values must have equal length");
+  H *r = new_list(T_VAL, s->len);
+  for (uint64_t i = 0; i < s->len; i++) vals(r)[i] = elem(s, i);
+  for (uint64_t i = 0; i < ix->len; i++)
+    vals(r)[index_into(elem(ix, i), s->len, "k.Scatter")] = elem(v, i);
+  return squeeze(r);
+}
+static V b_compress(V w, V x) {
+  H *b = need_flat(w, "k.Compress"), *s = need_list1(x, "k.Compress");
+  if (b->len != s->len) vm_error("k.Compress: 𝕩 must be a list as long as 𝕨");
+  uint64_t n = 0;
+  for (uint64_t i = 0; i < b->len; i++) {
+    double d = num(elem(b, i));
+    if (d != 0 && d != 1) vm_error("k.Compress: 𝕨 must be boolean");
+    n += d == 1;
+  }
+  H *r = new_list(s->type, n);
+  for (uint64_t i = 0, k = 0; i < b->len; i++) if (num(elem(b, i)) == 1) vals(r)[k++] = vals(s)[i];
+  return mk_ptr(r);
+}
+static V b_indices(V w, V x) {
+  (void)w;
+  H *c = need_flat(x, "k.Indices");
+  uint64_t n = 0;
+  for (uint64_t i = 0; i < c->len; i++) n += (uint64_t)nat(elem(c, i), "k.Indices");
+  H *r = new_list(T_F64, n);
+  for (uint64_t i = 0, k = 0; i < c->len; i++)
+    for (uint64_t j = (uint64_t)num(elem(c, i)); j--;) f64s(r)[k++] = (double)i;
   return mk_ptr(r);
 }
 
-// ================================================================== generated
-// #include "gen/kernels.c"   Singeli output (later)
-// #include "gen/prims.c"     primitive dialect output (step 2)
+// ---- search and sort
+static void merge_sort(uint64_t *ix, uint64_t *tmp, uint64_t n, H *h) {
+  if (n < 2) return;
+  uint64_t m = n / 2;
+  merge_sort(ix, tmp, m, h);
+  merge_sort(ix + m, tmp, n - m, h);
+  uint64_t i = 0, j = m, k = 0;
+  while (i < m && j < n) tmp[k++] = cmp(elem(h, ix[j]), elem(h, ix[i])) < 0 ? ix[j++] : ix[i++];
+  while (i < m) tmp[k++] = ix[i++];
+  while (j < n) tmp[k++] = ix[j++];
+  memcpy(ix, tmp, n * 8);
+}
+static V b_grade(V w, V x) {
+  (void)w;
+  H *h = need_list1(x, "k.Grade");
+  uint64_t *ix = malloc(h->len * 8 + 1), *tmp = malloc(h->len * 8 + 1);
+  for (uint64_t i = 0; i < h->len; i++) ix[i] = i;
+  merge_sort(ix, tmp, h->len, h);
+  H *r = new_list(T_F64, h->len);
+  for (uint64_t i = 0; i < h->len; i++) f64s(r)[i] = (double)ix[i];
+  free(ix); free(tmp);
+  return mk_ptr(r);
+}
+static V b_indexof(V w, V x) {
+  H *a = need_list1(w, "k.IndexOf"), *b = need_list1(x, "k.IndexOf");
+  H *r = new_list(T_F64, b->len);
+  for (uint64_t i = 0; i < b->len; i++) {
+    uint64_t j = 0;
+    V v = elem(b, i);
+    while (j < a->len && !match(elem(a, j), v)) j++;
+    f64s(r)[i] = (double)j;
+  }
+  return mk_ptr(r);
+}
+static V b_hist(V w, V x) {
+  uint64_t n = (uint64_t)nat(w, "k.Hist");
+  H *c = need_flat(x, "k.Hist"), *r = new_list(T_F64, n);
+  for (uint64_t i = 0; i < n; i++) f64s(r)[i] = 0;
+  for (uint64_t i = 0; i < c->len; i++) {
+    double d = nat(elem(c, i), "k.Hist");
+    if (d >= (double)n) vm_error("k.Hist: values must be below 𝕨");
+    f64s(r)[(uint64_t)d]++;
+  }
+  return mk_ptr(r);
+}
 
-// ================================================================ interpreter
-// Milestone 1.
+// ---- callbacks
+static V bm_each(V f, V w, V x) {
+  H *b = need_list1(x, "k._each");
+  H *a = w == NONE ? NULL : need_list1(w, "k._each");
+  if (a && a->len != b->len) vm_error("k._each: 𝕨 and 𝕩 must have equal length");
+  H *r = new_list(T_VAL, b->len);
+  for (uint64_t i = 0; i < b->len; i++) vals(r)[i] = call(f, a ? elem(a, i) : NONE, elem(b, i));
+  return squeeze(r);
+}
+static V bm_fold(V f, V w, V x) {
+  H *h = need_list1(x, "k._fold");
+  uint64_t n = h->len;
+  if (w == NONE && !n) vm_error("k._fold: empty 𝕩 needs 𝕨");
+  V a = w == NONE ? elem(h, --n) : w;
+  while (n--) a = call(f, elem(h, n), a);
+  return a;
+}
+static V bm_scan(V f, V w, V x) {
+  (void)w;
+  H *h = need_list1(x, "k._scan"), *r = new_list(T_VAL, h->len);
+  for (uint64_t i = 0; i < h->len; i++)
+    vals(r)[i] = i == 0 ? elem(h, 0) : call(f, vals(r)[i-1], elem(h, i));
+  return squeeze(r);
+}
+
+// ---- markers: opaque values that match only themselves, for ⌾
+static V b_markers(V w, V x) {
+  (void)w;
+  uint64_t n = (uint64_t)nat(x, "k.Markers");
+  H *r = new_list(T_VAL, n);
+  for (uint64_t i = 0; i < n; i++) vals(r)[i] = mk_ptr(h_alloc(T_MARK, 0, 0));
+  return mk_ptr(r);
+}
+static V b_ismarker(V w, V x) { (void)w; return N(is_type(x, T_MARK)); }
+
+// ---- encodings. Nothing is stored compressed yet: Enc always answers
+// "plain", which is always correct, and the constructors build plain lists.
+static V S_plain;
+static V b_enc(V w, V x) { (void)w; (void)x; return S_plain; }
+static V b_parts(V w, V x) { (void)w; (void)x; vm_error("k.Parts: the list is not encoded"); }
+static V b_sorted(V w, V x) { (void)w; (void)x; return N(0); }
+static V b_mkconst(V w, V x) {
+  (void)w;
+  need_list(x, 2);
+  V v = list_get(x, 0);
+  uint64_t n = (uint64_t)nat(list_get(x, 1), "k.MkConst");
+  H *r = new_list(T_VAL, n);
+  for (uint64_t i = 0; i < n; i++) vals(r)[i] = v;
+  return squeeze(r);
+}
+static V b_mkrange(V w, V x) {
+  (void)w;
+  need_list(x, 3);
+  V s = list_get(x, 0), d = list_get(x, 1);
+  if (!is_int(s) || !is_int(d)) vm_error("k.MkRange: s and d must be integers");
+  uint64_t n = (uint64_t)nat(list_get(x, 2), "k.MkRange");
+  if (n && !is_int(N(num(s) + num(d) * (double)(n - 1)))) vm_error("k.MkRange: elements must stay integers");
+  H *r = new_list(T_F64, n);
+  for (uint64_t i = 0; i < n; i++) f64s(r)[i] = num(s) + num(d) * (double)i;
+  return mk_ptr(r);
+}
+static V b_mkruns(V w, V x) {
+  (void)w;
+  need_list(x, 2);
+  H *v = need_list1(list_get(x, 0), "k.MkRuns"), *c = need_flat(list_get(x, 1), "k.MkRuns");
+  if (v->len != c->len) vm_error("k.MkRuns: v and c must have equal length");
+  uint64_t n = 0;
+  for (uint64_t i = 0; i < c->len; i++) {
+    double k = nat(elem(c, i), "k.MkRuns");
+    if (k < 1) vm_error("k.MkRuns: counts must be at least 1");
+    n += (uint64_t)k;
+  }
+  H *r = new_list(v->type, n);
+  for (uint64_t i = 0, k = 0; i < c->len; i++)
+    for (uint64_t j = (uint64_t)num(elem(c, i)); j--;) vals(r)[k++] = vals(v)[i];
+  return mk_ptr(r);
+}
+static V b_mkdict(V w, V x) {
+  (void)w;
+  need_list(x, 2);
+  V c = list_get(x, 0), d = list_get(x, 1);
+  need_list1(d, "k.MkDict");
+  if (!is_flat(c)) vm_error("k.MkDict: codes must be a flat list");
+  for (uint64_t i = 0; i < ptr(c)->len; i++) {
+    double k = nat(elem(ptr(c), i), "k.MkDict");
+    if (k >= (double)ptr(d)->len) vm_error("k.MkDict: codes must index d");
+  }
+  return b_gather(c, d);
+}
+
+static void runtime_init(void) {
+  S_plain = str_lit((const uint32_t[]){'p', 'l', 'a', 'i', 'n'}, 5);
+  P_right = fn_static(F_right);
+  P_left = fn_static(F_left);
+  P_assert = fn_static(F_assert);
+}
+
+// =================================================================== generated
+
+// Generated code jumps between bodies by label and may leave temporaries
+// unused; neither is worth a warning.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-label"
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#ifdef GEN_FILE
+#include GEN_FILE   // the tests build with extra definitions
+#else
+#include "gen/prims.c"
+#endif
+#pragma GCC diagnostic pop
+
+// ================================================================= interpreter
+// Milestone 4.
 
 // ======================================================================== main
 
 #ifdef PRIM_TEST
 
-// ---- show: compact BQN-like text. Matches CBQN's •Show for numbers and
-// lists; rank 0 prints as <x instead of CBQN's boxed layout.
+// Differential test harness: reads one case per line from stdin and prints
+// one result per line. A case is an exported name, an argument count and the
+// serialized arguments; a result is "ok <value>" or "err <message>".
+//
+// Serialization, as space-separated tokens:
+//   n<number>   number, printed with %.17g (inf, -inf, nan)
+//   c<code>     character
+//   a <rank> <shape...> <elements...>
+//   f, m        function, marker (output only)
+
 typedef struct { char *p; size_t n, cap; } Buf;
 static void put(Buf *b, const char *s) {
   size_t k = strlen(s);
   if (b->n + k + 1 > b->cap) {
     b->cap = 2 * (b->n + k + 1);
     b->p = realloc(b->p, b->cap);
-    if (!b->p) die("out of memory");
   }
   memcpy(b->p + b->n, s, k + 1);
   b->n += k;
 }
-static void show_num(Buf *b, double d) {
-  char s[40], t[48];
-  if (d != d) { put(b, "NaN"); return; }
-  if (isinf(d)) { put(b, d < 0 ? "¯∞" : "∞"); return; }
-  if (d == floor(d) && fabs(d) < 9007199254740992.0) {
-    snprintf(s, sizeof s, "%.0f", d == 0 ? 0 : d);
-  } else {
-    for (int p = 1; p <= 17; p++) {  // shortest text that reads back exactly
-      snprintf(s, sizeof s, "%.*g", p, d);
-      if (strtod(s, NULL) == d) break;
-    }
+static void ser(Buf *b, V v) {
+  char t[64];
+  if (is_num(v)) { snprintf(t, sizeof t, "n%.17g", num(v)); put(b, t); }
+  else if (is_chr(v)) { snprintf(t, sizeof t, "c%u", chr(v)); put(b, t); }
+  else if (is_arr(v)) {
+    H *h = ptr(v);
+    snprintf(t, sizeof t, "a %d", h->rank); put(b, t);
+    for (int i = 0; i < h->rank; i++) { snprintf(t, sizeof t, " %llu", (unsigned long long)shp(h)[i]); put(b, t); }
+    for (uint64_t i = 0; i < h->len; i++) { put(b, " "); ser(b, elem(h, i)); }
   }
-  size_t j = 0;  // '-' → '¯', and "e+05"/"e-05" → "e5"/"e¯5"
-  for (char *c = s; *c; c++) {
-    if (*c == '-') { memcpy(t + j, "¯", 2); j += 2; }
-    else if (*c == '+') {}
-    else if (*c == '0' && c > s && (c[-1] == 'e' || c[-1] == '+' || c[-1] == '-') &&
-             strchr(s, 'e') && strchr(s, 'e') < c) {}
-    else t[j++] = *c;
-  }
-  t[j] = 0;
-  put(b, t);
+  else put(b, is_type(v, T_FN) ? "f" : "m");
 }
-static void show_v(Buf *b, V v) {
-  if (is_num(v)) { show_num(b, num(v)); return; }
-  H *h = ptr(v);
-  if (h->rank == 0) { put(b, "<"); show_v(b, vals(h)[0]); return; }
-  if (h->rank > 1) { put(b, "(rank>1)"); return; }
-  if (h->len == 0) { put(b, "⟨⟩"); return; }
-  put(b, "⟨");
-  for (uint64_t i = 0; i < h->len; i++) { put(b, " "); show_v(b, vals(h)[i]); }
-  put(b, " ⟩");
+static char *tok_p;
+static char *tok(void) {
+  while (*tok_p == ' ') tok_p++;
+  if (!*tok_p) vm_error("harness: unexpected end of input");
+  char *s = tok_p;
+  while (*tok_p && *tok_p != ' ') tok_p++;
+  if (*tok_p) *tok_p++ = 0;
+  return s;
 }
-
-static int fails;
-// Consumes v.
-static void check(const char *name, V v, const char *want) {
-  Buf b = {0};
-  show_v(&b, v);
-  v_drop(v);
-  if (strcmp(b.p, want)) {
-    printf("FAIL %s: got %s, want %s\n", name, b.p, want);
-    fails++;
-  }
-  free(b.p);
-}
-static V list(const double *xs, uint64_t n) {
-  H *h = h_list(T_F64, n);
-  memcpy(f64s(h), xs, n * 8);
-  return mk_ptr(h);
-}
-#define LIST(...) \
-  list((const double[]){__VA_ARGS__}, sizeof((double[]){__VA_ARGS__}) / 8)
-
-// Hand-written stand-in for what gen/prims.c will contain, after Perceus:
-//   Reverse ← {n←≠𝕩 ⋄ (n-1+↕n)⊏𝕩}
-// n is a number, so its dup/drop are specialised away.
-static V prim_reverse(V x) {  // consumes x
-  V n = b_len(x);
-  V t = b_range(n);
-  t = b_add(mk_num(1), t);
-  t = b_sub(n, t);
-  V r = b_select(t, x);
-  v_drop(x);
-  return r;
+static V deser(void) {
+  char *t = tok();
+  if (t[0] == 'n') return N(strtod(t + 1, NULL));
+  if (t[0] == 'c') return C((uint32_t)strtoul(t + 1, NULL, 10));
+  if (t[0] != 'a') vm_error("harness: bad token %s", t);
+  int rank = atoi(tok());
+  uint64_t shape[256];
+  for (int i = 0; i < rank; i++) shape[i] = strtoull(tok(), NULL, 10);
+  H *h = new_arr(T_VAL, (uint8_t)rank, shape);
+  for (uint64_t i = 0; i < h->len; i++) vals(h)[i] = deser();
+  return squeeze(h);
 }
 
 int main(void) {
-  // Expected strings come from CBQN's •Show.
-  check("range", b_range(mk_num(5)), "⟨ 0 1 2 3 4 ⟩");
-  check("range 0", b_range(mk_num(0)), "⟨⟩");
-  check("add", b_add(LIST(1, 2, 3), LIST(10, 20, 30)), "⟨ 11 22 33 ⟩");
-  check("sub sv", b_sub(mk_num(10), LIST(1, 2, 3)), "⟨ 9 8 7 ⟩");
-  check("sub vs", b_sub(LIST(1, 2, 3), mk_num(10)), "⟨ ¯9 ¯8 ¯7 ⟩");
-  check("mul atoms", b_mul(mk_num(6), mk_num(7)), "42");
-  check("nums", LIST(0.1, -2.5, 1e20, 1.0 / 3, INFINITY, -INFINITY, 1e-7),
-        "⟨ 0.1 ¯2.5 1e20 0.3333333333333333 ∞ ¯∞ 1e¯7 ⟩");
-  V x = LIST(10, 11, 12, 13, 14);  // ⊏ borrows 𝕩
-  check("select", b_select(LIST(4, -1, 0), x), "⟨ 14 14 10 ⟩");
-  check("select atom", b_select(mk_num(2), x), "<12");
-  v_drop(x);
-  check("reverse", prim_reverse(LIST(10, 11, 12, 13, 14)),
-        "⟨ 14 13 12 11 10 ⟩");
-  check("reverse empty", prim_reverse(LIST()), "⟨⟩");
-
-  // Reuse: a unique argument's buffer becomes the result.
-  V a = LIST(1, 2, 3);
-  V r = b_add(a, mk_num(1));
-  if (r != a) { printf("FAIL add did not reuse its unique argument\n"); fails++; }
-  check("add in place", r, "⟨ 2 3 4 ⟩");
-
-  // A shared argument is left alone.
-  V s = LIST(1, 2, 3);
-  v_dup(s);
-  check("reverse shared", prim_reverse(s), "⟨ 3 2 1 ⟩");
-  check("shared intact", s, "⟨ 1 2 3 ⟩");
-
-  if (live_objs != 0) {
-    printf("FAIL rc balance: %ld objects live at exit\n", live_objs);
-    fails++;
+  runtime_init();
+  gen_init();
+  static char line[1 << 20];
+  while (fgets(line, sizeof line, stdin)) {
+    line[strcspn(line, "\n")] = 0;
+    if (!*line) continue;
+    jmp_buf jb;
+    err_jmp = &jb;
+    if (setjmp(jb)) { printf("err %s\n", err_msg); fflush(stdout); continue; }
+    tok_p = line;
+    char *name = tok();
+    V *fn = NULL;
+    for (int i = 0; gen_exports[i].name; i++)
+      if (!strcmp(gen_exports[i].name, name)) fn = gen_exports[i].val;
+    if (!fn) vm_error("harness: no export named %s", name);
+    int nargs = atoi(tok());
+    V x = deser(), w = NONE;
+    if (nargs == 2) { w = x; x = deser(); }
+    V r = call(*fn, w, x);
+    Buf b = {0};
+    ser(&b, r);
+    printf("ok %s\n", b.p);
+    fflush(stdout);
+    free(b.p);
   }
-  printf("%s (%d failures)\n", fails ? "FAILED" : "ok", fails);
-  return fails != 0;
+  return 0;
 }
 
 #else
 
 int main(void) {
-  fputs("vm: interpreter not written yet (milestone 1); "
-        "build with -DPRIM_TEST for the primitive tests\n", stderr);
+  runtime_init();
+  gen_init();
+  fputs("vm: interpreter not written yet (milestone 4); "
+        "run test/emit.bqn for the compiled primitives\n", stderr);
   return 1;
 }
 

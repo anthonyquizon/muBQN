@@ -61,6 +61,23 @@ Merge ← {
     (k.Cat ⟨k.Shape 𝕩, cs⟩) k.Reshape k.Cat Els k._each es
 }
 
+# ---- encodings (see k.bqn). Only lists are encoded. A path that uses an
+# encoding must give exactly the plain path's result.
+IsList ← {1 k.Eq RankOf 𝕩}
+Is ← {(IsList 𝕩) k.Min 𝕨 k.Match k.Enc 𝕩}          # "dict" Is 𝕩
+IntAtom ← {1 k.Eq k.Type 𝕩 ? 𝕩 k.Eq k.Floor 𝕩 ; 0}
+IntList ← {AllNum 𝕩 ? 1 k.Min k.FoldMin 𝕩 k.Eq k.Floor 𝕩 ; 0}
+Affine ← {(𝕩 k.Same k.add) k.Max (𝕩 k.Same k.sub) k.Max 𝕩 k.Same k.mul}
+
+# e 𝔽 _vals 𝕩: 𝔽 𝕩 for an elementwise 𝔽, computed once per stored value
+# when list 𝕩 has encoding e, and keeping that encoding
+_vals ← {
+  𝕨 𝔽 _𝕣 𝕩: 𝕨 k.Match "const" ? v‿n ← "const" k.Parts 𝕩 ⋄ k.MkConst ⟨𝔽 v, n⟩ ;
+  𝕨 𝔽 _𝕣 𝕩: 𝕨 k.Match "runs" ? v‿c ← "runs" k.Parts 𝕩 ⋄ k.MkRuns ⟨𝔽 v, c⟩ ;
+  𝕨 𝔽 _𝕣 𝕩: 𝕨 k.Match "dict" ? c‿d ← "dict" k.Parts 𝕩 ⋄ k.MkDict ⟨c, 𝔽 d⟩ ;
+  𝕨 𝔽 _𝕣 𝕩: 𝔽 𝕩
+}
+
 # ---- structure, basis only
 Shape ⇐ {𝕊 𝕩: k.Shape 𝕩 ; 𝕨 𝕊 𝕩: 1 k.Sub 𝕨 k.Match 𝕩}
 
@@ -72,14 +89,31 @@ Match ⇐ {
 
 Reshape ⇐ {
   𝕊 𝕩: Els 𝕩 ;
+  𝕨 𝕊 𝕩: (1 k.Eq k.Type 𝕨) k.Min 1 k.Eq k.Count 𝕩 ? k.MkConst ⟨0 k.Pick Els 𝕩, 𝕨⟩ ;
   𝕨 𝕊 𝕩:
     s ← Lst 𝕨 ⋄ d ← Els 𝕩 ⋄ n ← k.FoldMul s ⋄ m ← k.Len d
     "⥊: 𝕩 is empty and fills are not supported" ! (0 k.Lt m) k.Max n k.Eq 0
     s k.Reshape (m k.Mod k.Range n) k.Gather d
 }
 
+# 𝕨 Contig 𝕩: 𝕨 is a range of in-bounds, increasing, consecutive indices
+Contig ← {"range" Is 𝕨 ? s‿d‿n ← "range" k.Parts 𝕨 ⋄ (d k.Eq 1) k.Min (s k.Ge 0) k.Min (s k.Add n) k.Le k.Len 𝕩 ; 0}
 Select ⇐ {
   𝕊 𝕩: 0 𝕊 𝕩 ;
+  𝕨 𝕊 𝕩: "dict" Is 𝕩 ?
+    ix ← (Els 𝕨) k.Gather k.Range k.Len 𝕩
+    c‿d ← "dict" k.Parts 𝕩
+    (k.Shape 𝕨) k.Reshape k.MkDict ⟨ix k.Gather c, d⟩ ;
+  𝕨 𝕊 𝕩: "const" Is 𝕩 ?
+    ix ← (Els 𝕨) k.Gather k.Range k.Len 𝕩
+    (k.Shape 𝕨) k.Reshape k.MkConst ⟨0 k.Pick "const" k.Parts 𝕩, k.Len ix⟩ ;
+  𝕨 𝕊 𝕩: "range" Is 𝕩 ?
+    ix ← (Els 𝕨) k.Gather k.Range k.Len 𝕩
+    s‿d‿n ← "range" k.Parts 𝕩
+    (k.Shape 𝕨) k.Reshape s k.Add d k.Mul ix ;
+  𝕨 𝕊 𝕩: (IsList 𝕩) k.Min 𝕨 Contig 𝕩 ?
+    s‿d‿n ← "range" k.Parts 𝕨
+    ⟨s, n⟩ k.Slice k.Deshape 𝕩 ;
   𝕨 𝕊 𝕩:
     "⊏: 𝕩 must have rank at least 1" ! 0 k.Lt RankOf 𝕩
     ix ← (Els 𝕨) k.Gather k.Range k.Len 𝕩     # checks bounds, resolves negatives
@@ -107,7 +141,7 @@ Range ⇐ {
     s ← k.Deshape 𝕩 ⋄ i ← k.Range k.FoldMul s ⋄ st ← Strides s
     digits ← {(𝕩 k.Pick s) k.Mod k.Floor i k.Div 𝕩 k.Pick st} k._each k.Range k.Len s
     s k.Reshape {j ← 𝕩 ⋄ {j k.Pick 𝕩} k._each digits} k._each i ;
-  𝕊 𝕩: k.Range 𝕩
+  𝕊 𝕩: k.MkRange ⟨0, 1, 𝕩⟩
 }
 
 _each ⇐ {
@@ -125,6 +159,15 @@ _table ⇐ {
 }
 
 GradeUp ⇐ {
+  𝕊 𝕩: k.Sorted 𝕩 ? k.MkRange ⟨0, 1, k.Len 𝕩⟩ ;
+  𝕊 𝕩: "const" Is 𝕩 ? k.MkRange ⟨0, 1, k.Len 𝕩⟩ ;
+  𝕊 𝕩: "range" Is 𝕩 ?
+    s‿d‿n ← "range" k.Parts 𝕩
+    (d k.Ge 0) k.Pick ⟨k.MkRange ⟨n k.Sub 1, ¯1, n⟩, k.MkRange ⟨0, 1, n⟩⟩ ;
+  𝕊 𝕩: "dict" Is 𝕩 ?   # grade the dictionary, then the codes by rank
+    c‿d ← "dict" k.Parts 𝕩
+    r ← ((k.Grade d) k.Gather d) k.IndexOf d      # equal entries share a rank
+    k.Grade c k.Gather r ;
   𝕊 𝕩:
     "⍋: 𝕩 must have rank at least 1" ! 0 k.Lt RankOf 𝕩
     1 k.Eq RankOf 𝕩 ? k.Grade k.Deshape 𝕩 ;
@@ -132,6 +175,12 @@ GradeUp ⇐ {
 }
 
 Reverse ⇐ {
+  𝕊 𝕩: "range" Is 𝕩 ?
+    s‿d‿n ← "range" k.Parts 𝕩
+    k.MkRange ⟨s k.Add d k.Mul n k.Sub 1, 0 k.Sub d, n⟩ ;
+  𝕊 𝕩: "const" Is 𝕩 ? 𝕩 ;
+  𝕊 𝕩: "runs" Is 𝕩 ? v‿c ← "runs" k.Parts 𝕩 ⋄ k.MkRuns ⟨𝕊 v, 𝕊 c⟩ ;
+  𝕊 𝕩: "dict" Is 𝕩 ? c‿d ← "dict" k.Parts 𝕩 ⋄ k.MkDict ⟨𝕊 c, d⟩ ;
   𝕊 𝕩:
     "⌽: 𝕩 must have rank at least 1" ! 0 k.Lt RankOf 𝕩
     n ← k.Len 𝕩
@@ -147,7 +196,7 @@ Reverse ⇐ {
 # arrays of matching shape; anything else recurses through ¨.
 FlatOrAtom ← {k.IsArr 𝕩 ? k.Flat k.Deshape 𝕩 ; 1}
 Ev ← {k.IsArr 𝕩 ? k.Deshape 𝕩 ; 𝕩}
-_p2 ← {
+_p2f ← {
   𝕨 𝔽 _𝕣 𝕩: 0 k.Eq (k.IsArr 𝕨) k.Max k.IsArr 𝕩 ? 𝕨 𝔽 𝕩 ;
   𝕨 𝔽 _𝕣 𝕩:
     same ← (0 k.Eq k.IsArr 𝕨) k.Max (0 k.Eq k.IsArr 𝕩) k.Max (k.Shape 𝕨) k.Match k.Shape 𝕩
@@ -155,10 +204,28 @@ _p2 ← {
     ((k.IsArr 𝕨) k.Pick ⟨k.Shape 𝕩, k.Shape 𝕨⟩) k.Reshape (Ev 𝕨) 𝔽 Ev 𝕩 ;
   𝕨 𝔽 _𝕣 𝕩: 𝕨 𝔽 _𝕣¨ 𝕩
 }
-_p1 ← {
+_p1f ← {
   𝔽 _𝕣 𝕩: 0 k.Eq k.IsArr 𝕩 ? 𝔽 𝕩 ;
   𝔽 _𝕣 𝕩: k.Flat k.Deshape 𝕩 ? (k.Shape 𝕩) k.Reshape 𝔽 k.Deshape 𝕩 ;
   𝔽 _𝕣 𝕩: 𝔽 _𝕣¨ 𝕩
+}
+# With encodings: an affine operation moves a range, and any elementwise
+# operation between an atom and a const, runs or dict list works on the
+# stored values.
+_p2 ← {
+  𝕨 𝔽 _𝕣 𝕩: (IntAtom 𝕨) k.Min (Affine 𝕗) k.Min "range" Is 𝕩 ?
+    s‿d‿n ← "range" k.Parts 𝕩 ⋄ a ← 𝕨 𝔽 s
+    k.MkRange ⟨a, (𝕨 𝔽 s k.Add d) k.Sub a, n⟩ ;
+  𝕨 𝔽 _𝕣 𝕩: (IntAtom 𝕩) k.Min (Affine 𝕗) k.Min "range" Is 𝕨 ?
+    s‿d‿n ← "range" k.Parts 𝕨 ⋄ a ← s 𝔽 𝕩
+    k.MkRange ⟨a, ((s k.Add d) 𝔽 𝕩) k.Sub a, n⟩ ;
+  𝕨 𝔽 _𝕣 𝕩: (0 k.Eq k.IsArr 𝕨) k.Min IsList 𝕩 ? (k.Enc 𝕩) (𝕨 𝔽 _p2f ⊢) _vals 𝕩 ;
+  𝕨 𝔽 _𝕣 𝕩: (0 k.Eq k.IsArr 𝕩) k.Min IsList 𝕨 ? (k.Enc 𝕨) (𝔽 _p2f⟜𝕩) _vals 𝕨 ;
+  𝕨 𝔽 _𝕣 𝕩: 𝕨 𝔽 _p2f 𝕩
+}
+_p1 ← {
+  𝔽 _𝕣 𝕩: IsList 𝕩 ? (k.Enc 𝕩) (𝔽 _p1f) _vals 𝕩 ;
+  𝔽 _𝕣 𝕩: 𝔽 _p1f 𝕩
 }
 
 Plus ⇐ {𝕊 𝕩: 0 𝕊 𝕩 ; 𝕨 𝕊 𝕩: 𝕨 k.Add _p2 𝕩}
@@ -178,11 +245,23 @@ GreaterEq ⇐ {𝕨 𝕊 𝕩: 𝕨 k.Ge _p2 𝕩}
 
 # ---- from here on, definitions use glyphs
 GradeDown ⇐ {𝕊 𝕩: ⌽ (¯1+≠𝕩) - ⍋⌽𝕩}
-And ⇐ {𝕊 𝕩: (⍋𝕩)⊏𝕩 ; 𝕨 𝕊 𝕩: 𝕨×𝕩}
+And ⇐ {𝕊 𝕩: k.Sorted 𝕩 ? 𝕩 ; 𝕊 𝕩: (⍋𝕩)⊏𝕩 ; 𝕨 𝕊 𝕩: 𝕨×𝕩}
 Or ⇐ {𝕊 𝕩: (⍒𝕩)⊏𝕩 ; 𝕨 𝕊 𝕩: (𝕨+𝕩)-𝕨×𝕩}
 
 Replicate ⇐ {
-  𝕊 𝕩: "/: 𝕩 must be a list" ! 1==𝕩 ⋄ k.Indices k.Deshape 𝕩 ;
+  𝕊 𝕩:   # long runs stay run-length encoded
+    "/: 𝕩 must be a list" ! 1==𝕩
+    x ← k.Deshape 𝕩
+    "/: 𝕩 must be natural numbers" ! IntList x
+    "/: 𝕩 must be natural numbers" ! 1 k.Min k.FoldMin x k.Ge 0
+    nz ← 0 k.Lt x
+    (k.FoldAdd x) k.Ge 2 k.Mul k.FoldAdd nz ?
+    k.MkRuns ⟨nz k.Compress k.Range ≠x, nz k.Compress x⟩ ;
+  𝕊 𝕩: k.Indices k.Deshape 𝕩 ;
+  𝕨 𝕊 𝕩: ({IntAtom 𝕩 ? 𝕩 ≥ 1 ; 0} 𝕨) ∧ "runs" Is 𝕩 ?
+    v‿c ← "runs" k.Parts 𝕩 ⋄ k.MkRuns ⟨v, 𝕨×c⟩ ;
+  𝕨 𝕊 𝕩: "dict" Is 𝕩 ? c‿d ← "dict" k.Parts 𝕩 ⋄ k.MkDict ⟨𝕨 𝕊 c, d⟩ ;
+  𝕨 𝕊 𝕩: "const" Is 𝕩 ? v‿n ← "const" k.Parts 𝕩 ⋄ k.MkConst ⟨v, ≠𝕨 𝕊 k.Range n⟩ ;
   𝕨 𝕊 𝕩:
     "/: 𝕩 must have rank at least 1" ! 1≤=𝕩
     n ← ≠𝕩
@@ -202,8 +281,24 @@ Identity ← {
   𝕊 f: "´: no identity for this function on an empty list" ! 0
 }
 
+# Integer encodings, for folds that are exact only on integers
+IntConst ← {"const" Is 𝕩 ? IntAtom 0 k.Pick "const" k.Parts 𝕩 ; 0}
+IntRuns ← {"runs" Is 𝕩 ? IntList 0 k.Pick "runs" k.Parts 𝕩 ; 0}
+IntDict ← {"dict" Is 𝕩 ? IntList 1 k.Pick "dict" k.Parts 𝕩 ; 0}
+
 _fold ⇐ {
   𝔽 _𝕣 𝕩: "´: 𝕩 must be a list" ! 1==𝕩 ⋄ 0=≠𝕩 ? Identity 𝕗 ;
+  # +´ on encodings; floats take the plain path, since n×v rounds differently
+  # from n additions
+  𝔽 _𝕣 𝕩: (𝕗 k.Same plus) ∧ IntConst 𝕩 ? v‿n ← "const" k.Parts 𝕩 ⋄ n×v ;
+  𝔽 _𝕣 𝕩: (𝕗 k.Same plus) ∧ "range" Is 𝕩 ? s‿d‿n ← "range" k.Parts 𝕩 ⋄ (n×s) + d × (n×n-1)÷2 ;
+  𝔽 _𝕣 𝕩: (𝕗 k.Same plus) ∧ IntRuns 𝕩 ? v‿c ← "runs" k.Parts 𝕩 ⋄ 𝕊 v×c ;
+  𝔽 _𝕣 𝕩: (𝕗 k.Same plus) ∧ IntDict 𝕩 ? c‿d ← "dict" k.Parts 𝕩 ⋄ 𝕊 d × (≠d) k.Hist c ;
+  # ⌈´ on encodings: the maximum of the stored values that are used
+  𝔽 _𝕣 𝕩: (𝕗 k.Same ceil) ∧ "const" Is 𝕩 ? 0 k.Pick "const" k.Parts 𝕩 ;
+  𝔽 _𝕣 𝕩: (𝕗 k.Same ceil) ∧ "range" Is 𝕩 ? s‿d‿n ← "range" k.Parts 𝕩 ⋄ s ⌈ s + d×n-1 ;
+  𝔽 _𝕣 𝕩: (𝕗 k.Same ceil) ∧ "runs" Is 𝕩 ? 𝕊 0 k.Pick "runs" k.Parts 𝕩 ;
+  𝔽 _𝕣 𝕩: (𝕗 k.Same ceil) ∧ "dict" Is 𝕩 ? c‿d ← "dict" k.Parts 𝕩 ⋄ 𝕊 (0 < (≠d) k.Hist c) / d ;
   𝔽 _𝕣 𝕩: (𝕗 k.Same plus) ∧ k.Flat 𝕩 ? k.FoldAdd 𝕩 ;
   𝔽 _𝕣 𝕩: (𝕗 k.Same ceil) ∧ k.Flat 𝕩 ? k.FoldMax 𝕩 ;
   𝔽 _𝕣 𝕩: 𝔽 k._fold k.Deshape 𝕩 ;
@@ -274,6 +369,10 @@ IndexOf ⇐ {
     "⊐: 𝕩 must have rank at least 1" ! 1≤=𝕩
     f ← 𝕩 𝕊 𝕩
     f ⊏ (+`f = ↕≠𝕩) - 1 ;
+  # searching for encoded values: search for each stored value once
+  𝕨 𝕊 𝕩: (1==𝕨) ∧ "dict" Is 𝕩 ? c‿d ← "dict" k.Parts 𝕩 ⋄ k.MkDict ⟨c, 𝕨 𝕊 d⟩ ;
+  𝕨 𝕊 𝕩: (1==𝕨) ∧ "runs" Is 𝕩 ? v‿c ← "runs" k.Parts 𝕩 ⋄ k.MkRuns ⟨𝕨 𝕊 v, c⟩ ;
+  𝕨 𝕊 𝕩: (1==𝕨) ∧ "const" Is 𝕩 ? v‿n ← "const" k.Parts 𝕩 ⋄ k.MkConst ⟨0 k.Pick 𝕨 𝕊 ⟨v⟩, n⟩ ;
   𝕨 𝕊 𝕩:
     "⊐: 𝕨 must have rank at least 1" ! 1≤=𝕨
     c ← (=𝕨)-1
@@ -287,6 +386,8 @@ IndexOf ⇐ {
 
 Member ⇐ {
   𝕊 𝕩: "∊: 𝕩 must have rank at least 1" ! 1≤=𝕩 ⋄ (𝕩⊐𝕩) = ↕≠𝕩 ;
+  𝕨 𝕊 𝕩: (1==𝕩) ∧ "dict" Is 𝕨 ? c‿d ← "dict" k.Parts 𝕨 ⋄ k.MkDict ⟨c, d 𝕊 𝕩⟩ ;
+  𝕨 𝕊 𝕩: (1==𝕩) ∧ "runs" Is 𝕨 ? v‿c ← "runs" k.Parts 𝕨 ⋄ k.MkRuns ⟨v 𝕊 𝕩, c⟩ ;
   𝕨 𝕊 𝕩: (𝕩⊐𝕨) < ≠𝕩
 }
 

@@ -220,6 +220,41 @@ There is no i8 or i16, so no squeeze or widen logic. Fewer types also helps
 reuse: when a result has the same type as its input, it can be written into the
 input's buffer, and with fewer types this happens more often.
 
+### Compressed lists
+
+Inspired by l (lv1.sh), which runs primitives directly on compressed vectors.
+Its site names no specific encodings, so these come from the usual
+column-store set. A list may be stored in one of these encodings, each made
+of plain lists and numbers:
+
+| Encoding | Parts | Meaning |
+|---|---|---|
+| const | `v‿n` | `n` copies of `v` |
+| range | `s‿d‿n` | `s+d×↕n`, integers only |
+| runs | `v‿c` | `c/v`; counts are at least 1, and neighbouring runs may be equal |
+| dict | `c‿d` | `c⊏d`; `d` may have repeats and unused entries |
+
+There is also a sorted flag, like kdb+'s `s#`.
+
+- **Kernels don't change.** They run on plain lists, and an encoding's parts
+  are plain lists. Every basis operation accepts any encoding and decodes what
+  it doesn't handle, so correctness never depends on a fast path.
+- **The compressed-data algorithms are dialect code.** A primitive asks
+  `k.Enc` how a list is stored, takes `k.Parts`, and builds results with
+  `k.MkConst`, `k.MkRange`, `k.MkRuns` and `k.MkDict`. For example,
+  `𝕨∊𝕩` on a dict searches only the dictionary: `k.MkDict ⟨c, d∊𝕩⟩`.
+- **Encodings mostly come from primitives, not from scanning data.** `↕n`
+  is a range, `n⥊x` is a const, and `/` with long runs is runs. A
+  dictionary is kept through `⊏`, `/`, `⌽` and arithmetic with an atom.
+  Scanning data to choose an encoding belongs at I/O boundaries.
+- **Exactness.** Shortcuts that change floating-point rounding are not
+  allowed. `+´` on a const takes `n×v` only for integers, and range
+  arithmetic is limited to integers and to `+ - ×`, the operations that are
+  affine in each argument.
+- **Runtime cost.** An encoding tag in the header, parts as reference-counted
+  children (so arrays can share one dictionary), and one decode function per
+  encoding.
+
 ### Lists only at the native level
 
 Native fast paths handle rank ≤ 1. Higher ranks, cells and `⎉` fall back to the
@@ -402,9 +437,33 @@ Ordered by risk: the least proven parts come first.
      conditional.
    - `k.Compress` went unused: indices plus gather cover boolean `/`.
      Compress becomes an optimization kernel rather than a required one.
+0b. **Encodings spike on CBQN.** Done. `src/k.bqn` stores every list plain, so
+   `k.Enc` claims a random encoding from those the list could have, and
+   `k.Parts` uses each encoding's full freedom: shuffled dictionaries with
+   repeats and unused entries, split runs, and any step for a one-element
+   range. Encoded paths cover `+ - ×` and the other elementwise operations
+   with an atom, monadic arithmetic, `+´ ⌈´`, `⊏` (including a range of
+   indices as a slice), `⌽`, `/`, `⊐ ∊`, `⍋`, `∧`, and making `↕` and `⥊`.
+   At 1000 cases per test there are 0 mismatches, and the encoded paths ran
+   over 100,000 times. Speed can only be measured in C.
 1. **Compiler sketch.** Parse the dialect, convert to ANF, and emit C with no
    reference counting. Cover a monomorphized modifier (`+´`), a type split and
    a callback (`F¨` through `vm_call`). Link into `vm.c` and check against CBQN.
+   **Progress.** `src/c.bqn` parses the dialect, after `dialect.bqn` has
+   rewritten the glyphs, and emits C for all of `src/prims.bqn` (about 3,400
+   lines). The parser is checked by printing the AST back as fully
+   parenthesized BQN and running the dialect tests on that. `src/vm.c` has the
+   runtime and the C basis, and `test/emit.bqn` runs the shared tests
+   (`test/gen.bqn`) on the compiled C. Result: 0 mismatches at 500 cases per
+   test. Calls to top-level definitions, basis operations, `𝕊` and modifiers
+   applied on the spot are direct C calls; local blocks are flat closures.
+   Still to do: monomorphization (fold `k.Same`, and so `+´`, when the operand
+   is known, and drop dead bodies), and a type split resolved at compile time.
+   Dialect rules this turned up:
+   - A `𝕨` header (`𝕨 𝕊 𝕩:`) is dyadic only. In BQN it also matches a monadic
+     call, which prims.bqn never relies on.
+   - Each `;` body has its own scope, as in BQN, so names set before a
+     predicate are not visible in later bodies.
 2. **Perceus** on that IR: rc balance, plus counts of in-place updates and
    allocations with and without the pass.
 3. **Small-array benchmark:** compiled primitives against CBQN. This decides
@@ -415,6 +474,39 @@ Ordered by risk: the least proven parts come first.
    3. Borrow inference.
    4. Reuse tokens and drop specialization.
    5. Static imports via `•Import`.
+
+## Future: sparse arrays
+
+Graph algorithms written in array notation work over sparse matrices: the
+GraphBLAS approach of linear algebra over semirings such as min-plus and
+or-and. Sparse arrays would be another encoding, but they differ from the
+list encodings in two ways:
+
+- **Decoding is not a safe fallback.** Decoding a sparse adjacency matrix for
+  a million nodes means 10¹² cells. Above a size limit, a basis operation that
+  can't handle the encoding must fail rather than densify silently.
+- **Matrix product is an idiom, not a primitive.** BQN writes it as
+  `+˝∘×⎉1‿∞`, so the compiler has to recognize the pattern to call a sparse
+  kernel. This is the same static operand matching as monomorphizing `+´`.
+
+Design points:
+
+- **A background value instead of zero.** An elementwise operation with an
+  atom then always stays sparse: `x+1` changes only the background.
+- **Exactness.** Min-plus, or-and and integer arithmetic are exact in any
+  order. Floating-point sums are not, so they need the same rule as `+´` on
+  encodings.
+- **Switching representations.** The producer chooses, since it already knows
+  how many entries are non-background (as `/` does for runs). Go sparse below
+  about 10% density and dense above about 25–30%, with the gap preventing
+  flip-flopping. The exact thresholds come from benchmarks.
+- **Cheaper first step.** Much graph code in BQN uses adjacency lists
+  (`∾ frontier⊏adj`). Storing a list of lists as one flat list plus offsets
+  gives much of the benefit, and also speeds up `⊔`.
+
+When: after milestones 1–3, once encodings exist in C. Spike it on CBQN first,
+as in 0b, with BFS, shortest paths and PageRank written in plain BQN as the
+test programs.
 
 ## Open questions
 
