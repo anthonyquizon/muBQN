@@ -61,7 +61,7 @@ becomes section `b4` of `F_reverse`:
 
 ```c
   b4:; {
-  if (w != NONE) goto b5;                 // header "𝕊 𝕩": monadic only, else try the next case
+  if (!is_none(w)) goto b5;               // header "𝕊 𝕩": monadic only, else try the next case
   B t28 = F_rankof(NULL, NONE, x);        // RankOf 𝕩   → another generated function
   B t29 = b_lt(N(0), t28);                // 0 k.Lt …   → basis
   B t30 = p_assert(S13, t29);             // "…" ! …    → S13 is the message string constant

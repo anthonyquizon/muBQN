@@ -45,24 +45,28 @@ _Noreturn static void vm_error(const char *fmt, ...) {
 
 // ---- values: NaN-boxed. Numbers are plain doubles (NaNs canonicalised);
 // pointers, characters and NONE live in negative quiet-NaN space above every
-// real double.
-typedef uint64_t B;
+// real double. B is a union, as in CBQN, so that the C compiler rejects
+// arithmetic on values and silent conversions between values and integers:
+// bits are v.u, a number is v.f, and equality is spelled out (same, is_none).
+typedef union B { uint64_t u; double f; } B;
 #define TAG_MASK 0xFFFF000000000000ull
 #define TAG_PTR  0xFFF9000000000000ull
 #define TAG_CHR  0xFFFA000000000000ull
-#define NONE     0xFFFB000000000000ull   // no left argument
-#define NOTOK    TAG_PTR                 // null pointer: "no reuse token"
+#define NONE     ((B){.u = 0xFFFB000000000000ull})  // no left argument
+#define NOTOK    ((B){.u = TAG_PTR})                // null pointer: "no reuse token"
 
-static inline int is_num(B v) { return v < TAG_PTR; }
-static inline int is_ptr(B v) { return (v & TAG_MASK) == TAG_PTR; }
-static inline int is_chr(B v) { return (v & TAG_MASK) == TAG_CHR; }
-static inline double num(B v) { double d; memcpy(&d, &v, 8); return d; }
-static inline uint32_t chr(B v) { return (uint32_t)v; }
+static inline int same(B a, B b) { return a.u == b.u; }  // identical bits
+static inline int is_none(B v) { return v.u == NONE.u; }
+static inline int is_num(B v) { return v.u < TAG_PTR; }
+static inline int is_ptr(B v) { return (v.u & TAG_MASK) == TAG_PTR; }
+static inline int is_chr(B v) { return (v.u & TAG_MASK) == TAG_CHR; }
+static inline double num(B v) { return v.f; }
+static inline uint32_t chr(B v) { return (uint32_t)v.u; }
 static inline B mk_num(double d) {
-  if (d != d) return 0x7FF8000000000000ull;
-  B v; memcpy(&v, &d, 8); return v;
+  if (d != d) return (B){.u = 0x7FF8000000000000ull};
+  return (B){.f = d};
 }
-static inline B mk_chr(uint32_t c) { return TAG_CHR | c; }
+static inline B mk_chr(uint32_t c) { return (B){.u = TAG_CHR | c}; }
 #define N(d) mk_num(d)
 #define C(c) mk_chr(c)
 
@@ -79,8 +83,8 @@ typedef struct H {
   uint64_t cap;  // block size in bytes, for reuse
 } H;
 
-static inline H *ptr(B v) { return (H *)(uintptr_t)(v & ~TAG_MASK); }
-static inline B mk_ptr(H *h) { return (B)(uintptr_t)h | TAG_PTR; }
+static inline H *ptr(B v) { return (H *)(uintptr_t)(v.u & ~TAG_MASK); }
+static inline B mk_ptr(H *h) { return (B){.u = (uint64_t)(uintptr_t)h | TAG_PTR}; }
 static inline uint64_t *shp(H *h) { return (uint64_t *)(h + 1); }
 static inline B *vals(H *h) { return (B *)(shp(h) + h->rank); }
 static inline double *f64s(H *h) { return (double *)(shp(h) + h->rank); }
@@ -94,12 +98,12 @@ static long reused;     // stats: blocks recycled through reuse tokens
 static void h_free(H *h);
 
 static inline void v_dup(B v) {
-  if (!is_ptr(v) || v == NOTOK) return;
+  if (!is_ptr(v) || same(v, NOTOK)) return;
   H *h = ptr(v);
   if (!(h->flags & F_STATIC)) h->rc++;
 }
 static inline void v_drop(B v) {
-  if (!is_ptr(v) || v == NOTOK) return;
+  if (!is_ptr(v) || same(v, NOTOK)) return;
   H *h = ptr(v);
   if (!(h->flags & F_STATIC) && --h->rc == 0) h_free(h);
 }
@@ -132,7 +136,7 @@ static B drop_reuse(B v) {
 }
 static H *alloc_at(B tok, uint8_t type, uint8_t rank, uint64_t len) {
   size_t bytes = sizeof(H) + (rank + len) * 8;
-  if (tok != NOTOK) {
+  if (!same(tok, NOTOK)) {
     H *h = ptr(tok);
     if (h->cap >= bytes) {
       uint64_t cap = h->cap;
@@ -176,7 +180,7 @@ static B call(B f, B w, B x) {
   if (!is_type(f, T_FN)) return f;
   return ((FnH *)ptr(f))->fn(env(ptr(f)), w, x);
 }
-#define OR_X(w, x) ((w) == NONE ? (x) : (w))
+#define OR_X(w, x) (is_none(w) ? (x) : (w))
 
 static B D_atop(B *e, B w, B x) { return call(e[0], NONE, call(e[1], w, x)); }
 static B D_fork(B *e, B w, B x) {
@@ -187,13 +191,13 @@ static B D_fork(B *e, B w, B x) {
 static B D_atop2(B *e, B w, B x) { return call(e[0], NONE, call(e[1], w, x)); }  // ∘
 static B D_over(B *e, B w, B x) {                                               // ○
   B gx = call(e[1], NONE, x);
-  return call(e[0], w == NONE ? NONE : call(e[1], NONE, w), gx);
+  return call(e[0], is_none(w) ? NONE : call(e[1], NONE, w), gx);
 }
 static B D_before(B *e, B w, B x) { return call(e[1], call(e[0], NONE, OR_X(w, x)), x); }  // ⊸
 static B D_after(B *e, B w, B x) { return call(e[0], OR_X(w, x), call(e[1], NONE, x)); }   // ⟜
 static B D_swap(B *e, B w, B x) { return call(e[0], x, OR_X(w, x)); }                      // ˜
 static B D_const(B *e, B w, B x) { (void)w; (void)x; return e[0]; }                        // ˙
-static B D_valences(B *e, B w, B x) { return w == NONE ? call(e[0], NONE, x) : call(e[1], w, x); }  // ⊘
+static B D_valences(B *e, B w, B x) { return is_none(w) ? call(e[0], NONE, x) : call(e[1], w, x); }  // ⊘
 static B list_get(B a, uint64_t i);
 static uint64_t count(H *h);
 static B D_choose(B *e, B w, B x) {                                             // ◶
@@ -260,14 +264,14 @@ static B str_lit(const uint32_t *cs, uint64_t n) {
   return mk_ptr(h);
 }
 static int truth(B v) {
-  if (v == N(0)) return 0;
-  if (v == N(1)) return 1;
+  if (same(v, N(0))) return 0;
+  if (same(v, N(1))) return 1;
   vm_error("Expected boolean");
 }
 static B vm_nomatch(void) { vm_error("No header matched arguments"); }
 static B p_assert(B w, B x) {
-  if (x == N(1)) return x;
-  if (w == NONE) vm_error("Assertion error");
+  if (same(x, N(1))) return x;
+  if (is_none(w)) vm_error("Assertion error");
   char buf[256]; size_t k = 0;
   if (is_arr(w))
     for (uint64_t i = 0; i < ptr(w)->len && k + 4 < sizeof buf; i++) {
@@ -286,7 +290,7 @@ static B p_assert(B w, B x) {
 // by code, arrays by shape and elements, anything else by identity
 static int match(B a, B b) {
   if (is_num(a) || is_num(b)) return is_num(a) && is_num(b) && num(a) == num(b);
-  if (!is_arr(a) || !is_arr(b)) return a == b;
+  if (!is_arr(a) || !is_arr(b)) return same(a, b);
   H *x = ptr(a), *y = ptr(b);
   if (x->rank != y->rank || memcmp(shp(x), shp(y), x->rank * 8)) return 0;
   for (uint64_t i = 0; i < x->len; i++) if (!match(elem(x, i), elem(y, i))) return 0;
@@ -306,7 +310,7 @@ static int cmp(B a, B b) {
       return (x > y) - (x < y);
     }
     if (ta == 1) return (chr(a) > chr(b)) - (chr(a) < chr(b));
-    return (a > b) - (a < b);
+    return (a.u > b.u) - (a.u < b.u);
   }
   uint64_t na = aa ? ptr(a)->len : 1, nb = ba ? ptr(b)->len : 1;
   for (uint64_t i = 0; i < na && i < nb; i++) {
@@ -625,7 +629,7 @@ static B b_hist(B w, B x) {
 // ---- callbacks
 static B bm_each(B f, B w, B x) {
   H *b = need_list1(x, "k._each");
-  H *a = w == NONE ? NULL : need_list1(w, "k._each");
+  H *a = is_none(w) ? NULL : need_list1(w, "k._each");
   if (a && a->len != b->len) vm_error("k._each: 𝕨 and 𝕩 must have equal length");
   H *r = new_list(T_VAL, b->len);
   for (uint64_t i = 0; i < b->len; i++) vals(r)[i] = call(f, a ? elem(a, i) : NONE, elem(b, i));
@@ -634,8 +638,8 @@ static B bm_each(B f, B w, B x) {
 static B bm_fold(B f, B w, B x) {
   H *h = need_list1(x, "k._fold");
   uint64_t n = h->len;
-  if (w == NONE && !n) vm_error("k._fold: empty 𝕩 needs 𝕨");
-  B a = w == NONE ? elem(h, --n) : w;
+  if (is_none(w) && !n) vm_error("k._fold: empty 𝕩 needs 𝕨");
+  B a = is_none(w) ? elem(h, --n) : w;
   while (n--) a = call(f, elem(h, n), a);
   return a;
 }

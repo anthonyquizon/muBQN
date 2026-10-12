@@ -573,8 +573,8 @@ Gen ⇐ {
       next ← "b"∾•Fmt i+1
       fc.Emit "  b"∾(•Fmt i)∾":; {"
       v ← i⊑vals
-      fc.Emit⍟("mon"≡v) "  if (w != NONE) goto "∾next∾";"
-      fc.Emit⍟("dy"≡v) "  if (w == NONE) goto "∾next∾";"
+      fc.Emit⍟("mon"≡v) "  if (!is_none(w)) goto "∾next∾";"
+      fc.Emit⍟("dy"≡v) "  if (is_none(w)) goto "∾next∾";"
       fc.Push @
       h ← i⊑hdrs
       {𝕤

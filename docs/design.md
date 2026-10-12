@@ -169,9 +169,12 @@ fast kernels.
 
 ### Primitives in BQN over a kernel basis
 
-Primitives are written in BQN and stay there. They are not a temporary runtime
-to be replaced with C later, as in CBQN. Native code is a small **kernel
-basis**, and the primitives are built from it.
+Primitives are written in BQN and stay there. CBQN started with primitives in
+self-hosted BQN (`r1.bqn`) and replaced them with hand-written C; today only a
+few slow paths (`⚇` with non-zero depth, `⁼` on a non-function, some `⌾`)
+still call into `r1.bqn`. We keep the BQN source and generate that C from it
+instead. Native code is a small **kernel basis**, and the primitives are built
+from it.
 
 Array-at-a-time BQN pays overhead per call, not per element. A primitive written
 as a fixed number of whole-array operations, each of which is a native kernel,
@@ -255,10 +258,15 @@ There is also a sorted flag, like kdb+'s `s#`.
   children (so arrays can share one dictionary), and one decode function per
   encoding.
 
-### Lists only at the native level
+### Lists only in the basis
 
-Native fast paths handle rank ≤ 1. Higher ranks, cells and `⎉` fall back to the
-BQN runtime.
+Kernels and basis operations take lists only. Primitives handle every rank in
+the dialect, and so in the generated C, by treating an array as a shape plus
+its list of elements: higher ranks, cells and `⎉` become reshapes, cell
+index computations and gathers over the list operations. There is no
+interpreted fallback. Unlike CBQN, there is no dedicated C for higher-rank
+cases (row copies, transpose kernels, row hashing); those get added as
+kernels only where a benchmark shows a gap.
 
 ### Singeli as a kernel library
 

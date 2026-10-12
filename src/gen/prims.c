@@ -387,7 +387,7 @@ static B L_2(B *e, B w, B x) {
 static B F_kcells(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w == NONE) goto b1;
+  if (is_none(w)) goto b1;
   B t1 = b_isarr(NONE, x);
   B t2 = b_eq(N(0), t1);
   if (!truth(t2)) goto b1;
@@ -396,7 +396,7 @@ static B F_kcells(B *e, B w, B x) {
   return t4;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t5 = b_shape(NONE, x);
   B v_s_1 = t5;
   B t6 = b_len(NONE, v_s_1);
@@ -515,21 +515,21 @@ static B L_4(B *e, B w, B x) {
 static B F_merge(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = b_isarr(NONE, x);
   B t2 = b_eq(N(0), t1);
   if (!truth(t2)) goto b1;
   return x;
   }
   b1:; {
-  if (w != NONE) goto b2;
+  if (!is_none(w)) goto b2;
   B t3 = b_count(NONE, x);
   B t4 = b_eq(N(0), t3);
   if (!truth(t4)) goto b2;
   return x;
   }
   b2:; {
-  if (w != NONE) goto b3;
+  if (!is_none(w)) goto b3;
   B t5 = b_deshape(NONE, x);
   B v_es_1 = t5;
   B t6 = b_pick(N(0), v_es_1);
@@ -627,7 +627,7 @@ static B F_affine(B *e, B w, B x) {
 static B M_vals(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w == NONE) goto b1;
+  if (is_none(w)) goto b1;
   B t1 = b_match(w, S2);
   if (!truth(t1)) goto b1;
   B t2 = b_parts(S2, x);
@@ -642,7 +642,7 @@ static B M_vals(B *e, B w, B x) {
   return t7;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t8 = b_match(w, S3);
   if (!truth(t8)) goto b2;
   B t9 = b_parts(S3, x);
@@ -657,7 +657,7 @@ static B M_vals(B *e, B w, B x) {
   return t14;
   }
   b2:; {
-  if (w == NONE) goto b3;
+  if (is_none(w)) goto b3;
   B t15 = b_match(w, S4);
   if (!truth(t15)) goto b3;
   B t16 = b_parts(S4, x);
@@ -672,7 +672,7 @@ static B M_vals(B *e, B w, B x) {
   return t21;
   }
   b3:; {
-  if (w == NONE) goto b4;
+  if (is_none(w)) goto b4;
   B t22 = call(e[0], NONE, x);
   return t22;
   }
@@ -683,12 +683,12 @@ static B M_vals(B *e, B w, B x) {
 static B F_shape(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = b_shape(NONE, x);
   return t1;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t2 = b_match(w, x);
   B t3 = b_sub(N(1), t2);
   return t3;
@@ -700,7 +700,7 @@ static B F_shape(B *e, B w, B x) {
 static B F_match(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = b_isarr(NONE, x);
   if (!truth(t1)) goto b1;
   B t2 = b_deshape(NONE, x);
@@ -711,11 +711,11 @@ static B F_match(B *e, B w, B x) {
   return t6;
   }
   b1:; {
-  if (w != NONE) goto b2;
+  if (!is_none(w)) goto b2;
   return N(0);
   }
   b2:; {
-  if (w == NONE) goto b3;
+  if (is_none(w)) goto b3;
   B t7 = b_match(w, x);
   return t7;
   }
@@ -726,12 +726,12 @@ static B F_match(B *e, B w, B x) {
 static B F_reshape(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_els(NULL, NONE, x);
   return t1;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t2 = b_count(NONE, x);
   B t3 = b_eq(N(1), t2);
   B t4 = b_type(NONE, w);
@@ -745,7 +745,7 @@ static B F_reshape(B *e, B w, B x) {
   return t10;
   }
   b2:; {
-  if (w == NONE) goto b3;
+  if (is_none(w)) goto b3;
   B t11 = F_lst(NULL, NONE, w);
   B v_s_1 = t11;
   B t12 = F_els(NULL, NONE, x);
@@ -800,12 +800,12 @@ static B F_contig(B *e, B w, B x) {
 static B F_select(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_select(NULL, N(0), x);
   return t1;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t2 = F_is(NULL, S4, x);
   if (!truth(t2)) goto b2;
   B t3 = b_len(NONE, x);
@@ -827,7 +827,7 @@ static B F_select(B *e, B w, B x) {
   return t14;
   }
   b2:; {
-  if (w == NONE) goto b3;
+  if (is_none(w)) goto b3;
   B t15 = F_is(NULL, S2, x);
   if (!truth(t15)) goto b3;
   B t16 = b_len(NONE, x);
@@ -845,7 +845,7 @@ static B F_select(B *e, B w, B x) {
   return t26;
   }
   b3:; {
-  if (w == NONE) goto b4;
+  if (is_none(w)) goto b4;
   B t27 = F_is(NULL, S6, x);
   if (!truth(t27)) goto b4;
   B t28 = b_len(NONE, x);
@@ -868,7 +868,7 @@ static B F_select(B *e, B w, B x) {
   return t39;
   }
   b4:; {
-  if (w == NONE) goto b5;
+  if (is_none(w)) goto b5;
   B t40 = F_contig(NULL, w, x);
   B t41 = F_islist(NULL, NONE, x);
   B t42 = b_min(t41, t40);
@@ -887,7 +887,7 @@ static B F_select(B *e, B w, B x) {
   return t49;
   }
   b5:; {
-  if (w == NONE) goto b6;
+  if (is_none(w)) goto b6;
   B t50 = F_rankof(NULL, NONE, x);
   B t51 = b_lt(N(0), t50);
   B t52 = p_assert(S7, t51);
@@ -911,7 +911,7 @@ static B F_select(B *e, B w, B x) {
 static B F_pick(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = b_isarr(NONE, x);
   if (!truth(t1)) goto b1;
   B t2 = b_deshape(NONE, x);
@@ -919,11 +919,11 @@ static B F_pick(B *e, B w, B x) {
   return t3;
   }
   b1:; {
-  if (w != NONE) goto b2;
+  if (!is_none(w)) goto b2;
   return x;
   }
   b2:; {
-  if (w == NONE) goto b3;
+  if (is_none(w)) goto b3;
   B t4 = b_type(NONE, w);
   B t5 = b_eq(N(1), t4);
   if (!truth(t5)) goto b3;
@@ -935,7 +935,7 @@ static B F_pick(B *e, B w, B x) {
   return t10;
   }
   b3:; {
-  if (w == NONE) goto b4;
+  if (is_none(w)) goto b4;
   B t11 = F_allnum(NULL, NONE, w);
   B t12 = F_rankof(NULL, NONE, w);
   B t13 = b_eq(N(1), t12);
@@ -965,7 +965,7 @@ static B F_pick(B *e, B w, B x) {
   return t33;
   }
   b4:; {
-  if (w == NONE) goto b5;
+  if (is_none(w)) goto b5;
   B t34 = F_els(NULL, NONE, w);
   B t35 = mk_fn(D_after, 2, g_pick, x);
   B t36 = bm_each(t35, NONE, t34);
@@ -1016,7 +1016,7 @@ static B L_6(B *e, B w, B x) {
 static B F_range(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = b_isarr(NONE, x);
   if (!truth(t1)) goto b1;
   B t2 = F_rankof(NULL, NONE, x);
@@ -1040,7 +1040,7 @@ static B F_range(B *e, B w, B x) {
   return t15;
   }
   b1:; {
-  if (w != NONE) goto b2;
+  if (!is_none(w)) goto b2;
   B t16 = mk_list(3, (B[]){N(0), N(1), x});
   B t17 = b_mkrange(NONE, t16);
   return t17;
@@ -1052,7 +1052,7 @@ static B F_range(B *e, B w, B x) {
 static B M_each(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_els(NULL, NONE, x);
   B t2 = bm_each(e[0], NONE, t1);
   B t3 = b_shape(NONE, x);
@@ -1060,7 +1060,7 @@ static B M_each(B *e, B w, B x) {
   return t4;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t5 = F_agree(NULL, w, x);
   need_list(t5, 3);
   B t6 = list_get(t5, 0);
@@ -1080,12 +1080,12 @@ static B M_each(B *e, B w, B x) {
 static B M_table(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = M_each((B[]){e[0]}, NONE, x);
   return t1;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t2 = F_els(NULL, NONE, w);
   B v_wl_1 = t2;
   B t3 = F_els(NULL, NONE, x);
@@ -1120,7 +1120,7 @@ static B M_table(B *e, B w, B x) {
 static B F_gradeup(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = b_sorted(NONE, x);
   if (!truth(t1)) goto b1;
   B t2 = b_len(NONE, x);
@@ -1129,7 +1129,7 @@ static B F_gradeup(B *e, B w, B x) {
   return t4;
   }
   b1:; {
-  if (w != NONE) goto b2;
+  if (!is_none(w)) goto b2;
   B t5 = F_is(NULL, S2, x);
   if (!truth(t5)) goto b2;
   B t6 = b_len(NONE, x);
@@ -1138,7 +1138,7 @@ static B F_gradeup(B *e, B w, B x) {
   return t8;
   }
   b2:; {
-  if (w != NONE) goto b3;
+  if (!is_none(w)) goto b3;
   B t9 = F_is(NULL, S6, x);
   if (!truth(t9)) goto b3;
   B t10 = b_parts(S6, x);
@@ -1160,7 +1160,7 @@ static B F_gradeup(B *e, B w, B x) {
   return t21;
   }
   b3:; {
-  if (w != NONE) goto b4;
+  if (!is_none(w)) goto b4;
   B t22 = F_is(NULL, S4, x);
   if (!truth(t22)) goto b4;
   B t23 = b_parts(S4, x);
@@ -1178,7 +1178,7 @@ static B F_gradeup(B *e, B w, B x) {
   return t30;
   }
   b4:; {
-  if (w != NONE) goto b5;
+  if (!is_none(w)) goto b5;
   B t31 = F_rankof(NULL, NONE, x);
   B t32 = b_lt(N(0), t31);
   B t33 = p_assert(S12, t32);
@@ -1190,7 +1190,7 @@ static B F_gradeup(B *e, B w, B x) {
   return t37;
   }
   b5:; {
-  if (w != NONE) goto b6;
+  if (!is_none(w)) goto b6;
   B t38 = F_majorcells(NULL, NONE, x);
   B t39 = b_grade(NONE, t38);
   return t39;
@@ -1202,7 +1202,7 @@ static B F_gradeup(B *e, B w, B x) {
 static B F_reverse(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_is(NULL, S6, x);
   if (!truth(t1)) goto b1;
   B t2 = b_parts(S6, x);
@@ -1222,13 +1222,13 @@ static B F_reverse(B *e, B w, B x) {
   return t11;
   }
   b1:; {
-  if (w != NONE) goto b2;
+  if (!is_none(w)) goto b2;
   B t12 = F_is(NULL, S2, x);
   if (!truth(t12)) goto b2;
   return x;
   }
   b2:; {
-  if (w != NONE) goto b3;
+  if (!is_none(w)) goto b3;
   B t13 = F_is(NULL, S3, x);
   if (!truth(t13)) goto b3;
   B t14 = b_parts(S3, x);
@@ -1244,7 +1244,7 @@ static B F_reverse(B *e, B w, B x) {
   return t20;
   }
   b3:; {
-  if (w != NONE) goto b4;
+  if (!is_none(w)) goto b4;
   B t21 = F_is(NULL, S4, x);
   if (!truth(t21)) goto b4;
   B t22 = b_parts(S4, x);
@@ -1259,7 +1259,7 @@ static B F_reverse(B *e, B w, B x) {
   return t27;
   }
   b4:; {
-  if (w != NONE) goto b5;
+  if (!is_none(w)) goto b5;
   B t28 = F_rankof(NULL, NONE, x);
   B t29 = b_lt(N(0), t28);
   B t30 = p_assert(S13, t29);
@@ -1274,7 +1274,7 @@ static B F_reverse(B *e, B w, B x) {
   return t37;
   }
   b5:; {
-  if (w == NONE) goto b6;
+  if (is_none(w)) goto b6;
   B t38 = b_type(NONE, w);
   B t39 = b_eq(N(1), t38);
   B t40 = p_assert(S14, t39);
@@ -1329,7 +1329,7 @@ static B F_ev(B *e, B w, B x) {
 static B M_p2f(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w == NONE) goto b1;
+  if (is_none(w)) goto b1;
   B t1 = b_isarr(NONE, x);
   B t2 = b_isarr(NONE, w);
   B t3 = b_max(t2, t1);
@@ -1339,7 +1339,7 @@ static B M_p2f(B *e, B w, B x) {
   return t5;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t6 = b_shape(NONE, x);
   B t7 = b_shape(NONE, w);
   B t8 = b_match(t7, t6);
@@ -1367,7 +1367,7 @@ static B M_p2f(B *e, B w, B x) {
   return t27;
   }
   b2:; {
-  if (w == NONE) goto b3;
+  if (is_none(w)) goto b3;
   B t28 = mk_fn(M_p2f, 1, e[0]);
   B t29 = M_each((B[]){t28}, w, x);
   return t29;
@@ -1379,7 +1379,7 @@ static B M_p2f(B *e, B w, B x) {
 static B M_p1f(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = b_isarr(NONE, x);
   B t2 = b_eq(N(0), t1);
   if (!truth(t2)) goto b1;
@@ -1387,7 +1387,7 @@ static B M_p1f(B *e, B w, B x) {
   return t3;
   }
   b1:; {
-  if (w != NONE) goto b2;
+  if (!is_none(w)) goto b2;
   B t4 = b_deshape(NONE, x);
   B t5 = b_flat(NONE, t4);
   if (!truth(t5)) goto b2;
@@ -1398,7 +1398,7 @@ static B M_p1f(B *e, B w, B x) {
   return t9;
   }
   b2:; {
-  if (w != NONE) goto b3;
+  if (!is_none(w)) goto b3;
   B t10 = mk_fn(M_p1f, 1, e[0]);
   B t11 = M_each((B[]){t10}, NONE, x);
   return t11;
@@ -1410,7 +1410,7 @@ static B M_p1f(B *e, B w, B x) {
 static B M_p2(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w == NONE) goto b1;
+  if (is_none(w)) goto b1;
   B t1 = F_is(NULL, S6, x);
   B t2 = F_affine(NULL, NONE, e[0]);
   B t3 = b_min(t2, t1);
@@ -1435,7 +1435,7 @@ static B M_p2(B *e, B w, B x) {
   return t15;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t16 = F_is(NULL, S6, w);
   B t17 = F_affine(NULL, NONE, e[0]);
   B t18 = b_min(t17, t16);
@@ -1460,7 +1460,7 @@ static B M_p2(B *e, B w, B x) {
   return t30;
   }
   b2:; {
-  if (w == NONE) goto b3;
+  if (is_none(w)) goto b3;
   B t31 = F_islist(NULL, NONE, x);
   B t32 = b_isarr(NONE, w);
   B t33 = b_eq(N(0), t32);
@@ -1473,7 +1473,7 @@ static B M_p2(B *e, B w, B x) {
   return t38;
   }
   b3:; {
-  if (w == NONE) goto b4;
+  if (is_none(w)) goto b4;
   B t39 = F_islist(NULL, NONE, w);
   B t40 = b_isarr(NONE, x);
   B t41 = b_eq(N(0), t40);
@@ -1486,7 +1486,7 @@ static B M_p2(B *e, B w, B x) {
   return t46;
   }
   b4:; {
-  if (w == NONE) goto b5;
+  if (is_none(w)) goto b5;
   B t47 = M_p2f((B[]){e[0]}, w, x);
   return t47;
   }
@@ -1497,7 +1497,7 @@ static B M_p2(B *e, B w, B x) {
 static B M_p1(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_islist(NULL, NONE, x);
   if (!truth(t1)) goto b1;
   B t2 = b_enc(NONE, x);
@@ -1506,7 +1506,7 @@ static B M_p1(B *e, B w, B x) {
   return t4;
   }
   b1:; {
-  if (w != NONE) goto b2;
+  if (!is_none(w)) goto b2;
   B t5 = M_p1f((B[]){e[0]}, NONE, x);
   return t5;
   }
@@ -1517,12 +1517,12 @@ static B M_p1(B *e, B w, B x) {
 static B F_plus(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_plus(NULL, N(0), x);
   return t1;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t2 = M_p2((B[]){KV_add}, w, x);
   return t2;
   }
@@ -1533,12 +1533,12 @@ static B F_plus(B *e, B w, B x) {
 static B F_minus(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_minus(NULL, N(0), x);
   return t1;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t2 = M_p2((B[]){KV_sub}, w, x);
   return t2;
   }
@@ -1561,13 +1561,13 @@ static B L_8(B *e, B w, B x) {
 static B F_times(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = mk_fn(L_8, 0);
   B t2 = M_p1((B[]){t1}, NONE, x);
   return t2;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t3 = M_p2((B[]){KV_mul}, w, x);
   return t3;
   }
@@ -1578,12 +1578,12 @@ static B F_times(B *e, B w, B x) {
 static B F_divide(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_divide(NULL, N(1), x);
   return t1;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t2 = M_p2((B[]){KV_div}, w, x);
   return t2;
   }
@@ -1594,12 +1594,12 @@ static B F_divide(B *e, B w, B x) {
 static B F_floor(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = M_p1((B[]){KV_floor}, NONE, x);
   return t1;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t2 = M_p2((B[]){KV_min}, w, x);
   return t2;
   }
@@ -1610,14 +1610,14 @@ static B F_floor(B *e, B w, B x) {
 static B F_ceil(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_minus(NULL, NONE, x);
   B t2 = F_floor(NULL, NONE, t1);
   B t3 = F_minus(NULL, NONE, t2);
   return t3;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t4 = M_p2((B[]){KV_max}, w, x);
   return t4;
   }
@@ -1628,12 +1628,12 @@ static B F_ceil(B *e, B w, B x) {
 static B F_abs(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = M_p1((B[]){KV_abs}, NONE, x);
   return t1;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t2 = M_p2((B[]){KV_mod}, w, x);
   return t2;
   }
@@ -1644,12 +1644,12 @@ static B F_abs(B *e, B w, B x) {
 static B F_not(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_minus(NULL, N(1), x);
   return t1;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t2 = F_minus(NULL, w, x);
   B t3 = F_plus(NULL, N(1), t2);
   return t3;
@@ -1661,12 +1661,12 @@ static B F_not(B *e, B w, B x) {
 static B F_equal(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_rankof(NULL, NONE, x);
   return t1;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t2 = M_p2((B[]){KV_eq}, w, x);
   return t2;
   }
@@ -1677,12 +1677,12 @@ static B F_equal(B *e, B w, B x) {
 static B F_noteq(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = b_len(NONE, x);
   return t1;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t2 = M_p2((B[]){KV_ne}, w, x);
   return t2;
   }
@@ -1693,13 +1693,13 @@ static B F_noteq(B *e, B w, B x) {
 static B F_less(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = mk_list(1, (B[]){x});
   B t2 = b_reshape(mk_list(0, NULL), t1);
   return t2;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t3 = M_p2((B[]){KV_lt}, w, x);
   return t3;
   }
@@ -1710,12 +1710,12 @@ static B F_less(B *e, B w, B x) {
 static B F_greater(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_merge(NULL, NONE, x);
   return t1;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t2 = M_p2((B[]){KV_gt}, w, x);
   return t2;
   }
@@ -1726,7 +1726,7 @@ static B F_greater(B *e, B w, B x) {
 static B F_lesseq(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w == NONE) goto b1;
+  if (is_none(w)) goto b1;
   B t1 = M_p2((B[]){KV_le}, w, x);
   return t1;
   }
@@ -1737,7 +1737,7 @@ static B F_lesseq(B *e, B w, B x) {
 static B F_greatereq(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w == NONE) goto b1;
+  if (is_none(w)) goto b1;
   B t1 = M_p2((B[]){KV_ge}, w, x);
   return t1;
   }
@@ -1748,7 +1748,7 @@ static B F_greatereq(B *e, B w, B x) {
 static B F_gradedown(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_reverse(NULL, NONE, x);
   B t2 = F_gradeup(NULL, NONE, t1);
   B t3 = F_noteq(NULL, NONE, x);
@@ -1764,19 +1764,19 @@ static B F_gradedown(B *e, B w, B x) {
 static B F_and(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = b_sorted(NONE, x);
   if (!truth(t1)) goto b1;
   return x;
   }
   b1:; {
-  if (w != NONE) goto b2;
+  if (!is_none(w)) goto b2;
   B t2 = F_gradeup(NULL, NONE, x);
   B t3 = F_select(NULL, t2, x);
   return t3;
   }
   b2:; {
-  if (w == NONE) goto b3;
+  if (is_none(w)) goto b3;
   B t4 = F_times(NULL, w, x);
   return t4;
   }
@@ -1787,13 +1787,13 @@ static B F_and(B *e, B w, B x) {
 static B F_or(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_gradedown(NULL, NONE, x);
   B t2 = F_select(NULL, t1, x);
   return t2;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t3 = F_times(NULL, w, x);
   B t4 = F_plus(NULL, w, x);
   B t5 = F_minus(NULL, t4, t3);
@@ -1821,7 +1821,7 @@ static B L_9(B *e, B w, B x) {
 static B L_10(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_equal(NULL, NONE, x);
   B t2 = F_equal(NULL, N(0), t1);
   if (!truth(t2)) goto b1;
@@ -1829,7 +1829,7 @@ static B L_10(B *e, B w, B x) {
   return t3;
   }
   b1:; {
-  if (w != NONE) goto b2;
+  if (!is_none(w)) goto b2;
   return x;
   }
   b2:; return vm_nomatch();
@@ -1839,7 +1839,7 @@ static B L_10(B *e, B w, B x) {
 static B F_replicate(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_equal(NULL, NONE, x);
   B t2 = F_equal(NULL, N(1), t1);
   B t3 = p_assert(S15, t2);
@@ -1867,13 +1867,13 @@ static B F_replicate(B *e, B w, B x) {
   return t21;
   }
   b1:; {
-  if (w != NONE) goto b2;
+  if (!is_none(w)) goto b2;
   B t22 = b_deshape(NONE, x);
   B t23 = b_indices(NONE, t22);
   return t23;
   }
   b2:; {
-  if (w == NONE) goto b3;
+  if (is_none(w)) goto b3;
   B t24 = F_is(NULL, S3, x);
   B t25 = mk_fn(L_9, 0);
   B t26 = call(t25, NONE, w);
@@ -1891,7 +1891,7 @@ static B F_replicate(B *e, B w, B x) {
   return t33;
   }
   b3:; {
-  if (w == NONE) goto b4;
+  if (is_none(w)) goto b4;
   B t34 = F_is(NULL, S4, x);
   if (!truth(t34)) goto b4;
   B t35 = b_parts(S4, x);
@@ -1906,7 +1906,7 @@ static B F_replicate(B *e, B w, B x) {
   return t40;
   }
   b4:; {
-  if (w == NONE) goto b5;
+  if (is_none(w)) goto b5;
   B t41 = F_is(NULL, S2, x);
   if (!truth(t41)) goto b5;
   B t42 = b_parts(S2, x);
@@ -1923,7 +1923,7 @@ static B F_replicate(B *e, B w, B x) {
   return t49;
   }
   b5:; {
-  if (w == NONE) goto b6;
+  if (is_none(w)) goto b6;
   B t50 = F_equal(NULL, NONE, x);
   B t51 = F_lesseq(NULL, N(1), t50);
   B t52 = p_assert(S17, t51);
@@ -1957,7 +1957,7 @@ static B F_replicate(B *e, B w, B x) {
 static B F_identity(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = b_same(x, g_noteq);
   B t2 = b_same(x, g_or);
   B t3 = F_or(NULL, t2, t1);
@@ -1969,7 +1969,7 @@ static B F_identity(B *e, B w, B x) {
   return N(0);
   }
   b1:; {
-  if (w != NONE) goto b2;
+  if (!is_none(w)) goto b2;
   B t8 = b_same(x, g_equal);
   B t9 = b_same(x, g_and);
   B t10 = F_or(NULL, t9, t8);
@@ -1981,19 +1981,19 @@ static B F_identity(B *e, B w, B x) {
   return N(1);
   }
   b2:; {
-  if (w != NONE) goto b3;
+  if (!is_none(w)) goto b3;
   B t15 = b_same(x, g_floor);
   if (!truth(t15)) goto b3;
   return N(INFINITY);
   }
   b3:; {
-  if (w != NONE) goto b4;
+  if (!is_none(w)) goto b4;
   B t16 = b_same(x, g_ceil);
   if (!truth(t16)) goto b4;
   return N(-INFINITY);
   }
   b4:; {
-  if (w != NONE) goto b5;
+  if (!is_none(w)) goto b5;
   B t17 = p_assert(S19, N(0));
   return t17;
   }
@@ -2055,7 +2055,7 @@ static B F_intdict(B *e, B w, B x) {
 static B M_fold(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_equal(NULL, NONE, x);
   B t2 = F_equal(NULL, N(1), t1);
   B t3 = p_assert(S20, t2);
@@ -2066,7 +2066,7 @@ static B M_fold(B *e, B w, B x) {
   return t6;
   }
   b1:; {
-  if (w != NONE) goto b2;
+  if (!is_none(w)) goto b2;
   B t7 = F_intconst(NULL, NONE, x);
   B t8 = b_same(e[0], g_plus);
   B t9 = F_and(NULL, t8, t7);
@@ -2081,7 +2081,7 @@ static B M_fold(B *e, B w, B x) {
   return t13;
   }
   b2:; {
-  if (w != NONE) goto b3;
+  if (!is_none(w)) goto b3;
   B t14 = F_is(NULL, S6, x);
   B t15 = b_same(e[0], g_plus);
   B t16 = F_and(NULL, t15, t14);
@@ -2103,7 +2103,7 @@ static B M_fold(B *e, B w, B x) {
   return t26;
   }
   b3:; {
-  if (w != NONE) goto b4;
+  if (!is_none(w)) goto b4;
   B t27 = F_intruns(NULL, NONE, x);
   B t28 = b_same(e[0], g_plus);
   B t29 = F_and(NULL, t28, t27);
@@ -2119,7 +2119,7 @@ static B M_fold(B *e, B w, B x) {
   return t34;
   }
   b4:; {
-  if (w != NONE) goto b5;
+  if (!is_none(w)) goto b5;
   B t35 = F_intdict(NULL, NONE, x);
   B t36 = b_same(e[0], g_plus);
   B t37 = F_and(NULL, t36, t35);
@@ -2137,7 +2137,7 @@ static B M_fold(B *e, B w, B x) {
   return t44;
   }
   b5:; {
-  if (w != NONE) goto b6;
+  if (!is_none(w)) goto b6;
   B t45 = F_is(NULL, S2, x);
   B t46 = b_same(e[0], g_ceil);
   B t47 = F_and(NULL, t46, t45);
@@ -2147,7 +2147,7 @@ static B M_fold(B *e, B w, B x) {
   return t49;
   }
   b6:; {
-  if (w != NONE) goto b7;
+  if (!is_none(w)) goto b7;
   B t50 = F_is(NULL, S6, x);
   B t51 = b_same(e[0], g_ceil);
   B t52 = F_and(NULL, t51, t50);
@@ -2167,7 +2167,7 @@ static B M_fold(B *e, B w, B x) {
   return t60;
   }
   b7:; {
-  if (w != NONE) goto b8;
+  if (!is_none(w)) goto b8;
   B t61 = F_is(NULL, S3, x);
   B t62 = b_same(e[0], g_ceil);
   B t63 = F_and(NULL, t62, t61);
@@ -2178,7 +2178,7 @@ static B M_fold(B *e, B w, B x) {
   return t66;
   }
   b8:; {
-  if (w != NONE) goto b9;
+  if (!is_none(w)) goto b9;
   B t67 = F_is(NULL, S4, x);
   B t68 = b_same(e[0], g_ceil);
   B t69 = F_and(NULL, t68, t67);
@@ -2197,7 +2197,7 @@ static B M_fold(B *e, B w, B x) {
   return t77;
   }
   b9:; {
-  if (w != NONE) goto b10;
+  if (!is_none(w)) goto b10;
   B t78 = b_flat(NONE, x);
   B t79 = b_same(e[0], g_plus);
   B t80 = F_and(NULL, t79, t78);
@@ -2206,7 +2206,7 @@ static B M_fold(B *e, B w, B x) {
   return t81;
   }
   b10:; {
-  if (w != NONE) goto b11;
+  if (!is_none(w)) goto b11;
   B t82 = b_flat(NONE, x);
   B t83 = b_same(e[0], g_ceil);
   B t84 = F_and(NULL, t83, t82);
@@ -2215,13 +2215,13 @@ static B M_fold(B *e, B w, B x) {
   return t85;
   }
   b11:; {
-  if (w != NONE) goto b12;
+  if (!is_none(w)) goto b12;
   B t86 = b_deshape(NONE, x);
   B t87 = bm_fold(e[0], NONE, t86);
   return t87;
   }
   b12:; {
-  if (w == NONE) goto b13;
+  if (is_none(w)) goto b13;
   B t88 = F_equal(NULL, NONE, x);
   B t89 = F_equal(NULL, N(1), t88);
   B t90 = p_assert(S20, t89);
@@ -2236,7 +2236,7 @@ static B M_fold(B *e, B w, B x) {
 static B M_insert(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_equal(NULL, NONE, x);
   B t2 = F_lesseq(NULL, N(1), t1);
   B t3 = p_assert(S21, t2);
@@ -2249,13 +2249,13 @@ static B M_insert(B *e, B w, B x) {
   return t8;
   }
   b1:; {
-  if (w != NONE) goto b2;
+  if (!is_none(w)) goto b2;
   B t9 = F_majorcells(NULL, NONE, x);
   B t10 = bm_fold(e[0], NONE, t9);
   return t10;
   }
   b2:; {
-  if (w == NONE) goto b3;
+  if (is_none(w)) goto b3;
   B t11 = F_equal(NULL, NONE, x);
   B t12 = F_lesseq(NULL, N(1), t11);
   B t13 = p_assert(S21, t12);
@@ -2270,7 +2270,7 @@ static B M_insert(B *e, B w, B x) {
 static B M_scan(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_equal(NULL, NONE, x);
   B t2 = F_lesseq(NULL, N(1), t1);
   B t3 = p_assert(S22, t2);
@@ -2280,7 +2280,7 @@ static B M_scan(B *e, B w, B x) {
   return x;
   }
   b1:; {
-  if (w != NONE) goto b2;
+  if (!is_none(w)) goto b2;
   B t6 = b_flat(NONE, x);
   B t7 = b_same(e[0], g_plus);
   B t8 = F_and(NULL, t7, t6);
@@ -2292,7 +2292,7 @@ static B M_scan(B *e, B w, B x) {
   return t12;
   }
   b2:; {
-  if (w != NONE) goto b3;
+  if (!is_none(w)) goto b3;
   B t13 = b_flat(NONE, x);
   B t14 = b_same(e[0], g_ceil);
   B t15 = F_and(NULL, t14, t13);
@@ -2304,7 +2304,7 @@ static B M_scan(B *e, B w, B x) {
   return t19;
   }
   b3:; {
-  if (w != NONE) goto b4;
+  if (!is_none(w)) goto b4;
   B t20 = F_equal(NULL, NONE, x);
   B t21 = F_equal(NULL, N(1), t20);
   if (!truth(t21)) goto b4;
@@ -2313,14 +2313,14 @@ static B M_scan(B *e, B w, B x) {
   return t23;
   }
   b4:; {
-  if (w != NONE) goto b5;
+  if (!is_none(w)) goto b5;
   B t24 = F_majorcells(NULL, NONE, x);
   B t25 = bm_scan(e[0], NONE, t24);
   B t26 = F_greater(NULL, NONE, t25);
   return t26;
   }
   b5:; {
-  if (w == NONE) goto b6;
+  if (is_none(w)) goto b6;
   B t27 = F_equal(NULL, NONE, x);
   B t28 = F_lesseq(NULL, N(1), t27);
   B t29 = p_assert(S22, t28);
@@ -2330,7 +2330,7 @@ static B M_scan(B *e, B w, B x) {
   return x;
   }
   b6:; {
-  if (w == NONE) goto b7;
+  if (is_none(w)) goto b7;
   B t32 = F_equal(NULL, NONE, x);
   B t33 = F_equal(NULL, N(1), t32);
   if (!truth(t33)) goto b7;
@@ -2349,7 +2349,7 @@ static B M_scan(B *e, B w, B x) {
   return t45;
   }
   b7:; {
-  if (w == NONE) goto b8;
+  if (is_none(w)) goto b8;
   B t46 = F_majorcells(NULL, NONE, x);
   B v_cells_1 = t46;
   B t47 = mk_list(1, (B[]){w});
@@ -2369,7 +2369,7 @@ static B M_scan(B *e, B w, B x) {
 static B L_11(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_equal(NULL, NONE, x);
   B t2 = F_equal(NULL, e[0], t1);
   if (!truth(t2)) goto b1;
@@ -2377,7 +2377,7 @@ static B L_11(B *e, B w, B x) {
   return t3;
   }
   b1:; {
-  if (w != NONE) goto b2;
+  if (!is_none(w)) goto b2;
   B t4 = F_shape(NULL, NONE, x);
   return t4;
   }
@@ -2388,7 +2388,7 @@ static B L_11(B *e, B w, B x) {
 static B L_12(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_equal(NULL, NONE, x);
   B t2 = F_equal(NULL, e[0], t1);
   if (!truth(t2)) goto b1;
@@ -2396,7 +2396,7 @@ static B L_12(B *e, B w, B x) {
   return t3;
   }
   b1:; {
-  if (w != NONE) goto b2;
+  if (!is_none(w)) goto b2;
   return N(1);
   }
   b2:; return vm_nomatch();
@@ -2406,7 +2406,7 @@ static B L_12(B *e, B w, B x) {
 static B F_join(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_equal(NULL, NONE, x);
   B t2 = F_equal(NULL, N(1), t1);
   B t3 = p_assert(S24, t2);
@@ -2417,7 +2417,7 @@ static B F_join(B *e, B w, B x) {
   return t7;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t8 = F_equal(NULL, NONE, w);
   B v_wr_1 = t8;
   B t9 = F_equal(NULL, NONE, x);
@@ -2460,13 +2460,13 @@ static B F_join(B *e, B w, B x) {
 static B F_couple(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = mk_list(1, (B[]){x});
   B t2 = F_greater(NULL, NONE, t1);
   return t2;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t3 = mk_list(2, (B[]){w, x});
   B t4 = F_greater(NULL, NONE, t3);
   return t4;
@@ -2478,12 +2478,12 @@ static B F_couple(B *e, B w, B x) {
 static B F_pair(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = mk_list(1, (B[]){x});
   return t1;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t2 = mk_list(2, (B[]){w, x});
   return t2;
   }
@@ -2494,7 +2494,7 @@ static B F_pair(B *e, B w, B x) {
 static B L_13(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_equal(NULL, NONE, x);
   B t2 = F_equal(NULL, N(0), t1);
   if (!truth(t2)) goto b1;
@@ -2502,7 +2502,7 @@ static B L_13(B *e, B w, B x) {
   return t3;
   }
   b1:; {
-  if (w != NONE) goto b2;
+  if (!is_none(w)) goto b2;
   return x;
   }
   b2:; return vm_nomatch();
@@ -2512,7 +2512,7 @@ static B L_13(B *e, B w, B x) {
 static B L_14(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_less(NULL, N(0), x);
   if (!truth(t1)) goto b1;
   B t2 = b_deshape(NONE, e[0]);
@@ -2520,7 +2520,7 @@ static B L_14(B *e, B w, B x) {
   return t3;
   }
   b1:; {
-  if (w != NONE) goto b2;
+  if (!is_none(w)) goto b2;
   return N(0);
   }
   b2:; return vm_nomatch();
@@ -2530,7 +2530,7 @@ static B L_14(B *e, B w, B x) {
 static B F_take(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_equal(NULL, NONE, x);
   B t2 = F_lesseq(NULL, N(1), t1);
   B t3 = p_assert(S28, t2);
@@ -2542,7 +2542,7 @@ static B F_take(B *e, B w, B x) {
   return t8;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t9 = b_type(NONE, w);
   B t10 = b_eq(N(1), t9);
   B t11 = p_assert(S29, t10);
@@ -2593,7 +2593,7 @@ static B F_take(B *e, B w, B x) {
 static B L_15(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_equal(NULL, NONE, x);
   B t2 = F_equal(NULL, N(0), t1);
   if (!truth(t2)) goto b1;
@@ -2601,7 +2601,7 @@ static B L_15(B *e, B w, B x) {
   return t3;
   }
   b1:; {
-  if (w != NONE) goto b2;
+  if (!is_none(w)) goto b2;
   return x;
   }
   b2:; return vm_nomatch();
@@ -2611,7 +2611,7 @@ static B L_15(B *e, B w, B x) {
 static B F_drop(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_equal(NULL, NONE, x);
   B t2 = F_lesseq(NULL, N(1), t1);
   B t3 = p_assert(S30, t2);
@@ -2623,7 +2623,7 @@ static B F_drop(B *e, B w, B x) {
   return t8;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t9 = b_type(NONE, w);
   B t10 = b_eq(N(1), t9);
   B t11 = p_assert(S31, t10);
@@ -2650,7 +2650,7 @@ static B F_drop(B *e, B w, B x) {
 static B F_indexof(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_equal(NULL, NONE, x);
   B t2 = F_lesseq(NULL, N(1), t1);
   B t3 = p_assert(S32, t2);
@@ -2665,7 +2665,7 @@ static B F_indexof(B *e, B w, B x) {
   return t10;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t11 = F_is(NULL, S4, x);
   B t12 = F_equal(NULL, NONE, w);
   B t13 = F_equal(NULL, N(1), t12);
@@ -2683,7 +2683,7 @@ static B F_indexof(B *e, B w, B x) {
   return t20;
   }
   b2:; {
-  if (w == NONE) goto b3;
+  if (is_none(w)) goto b3;
   B t21 = F_is(NULL, S3, x);
   B t22 = F_equal(NULL, NONE, w);
   B t23 = F_equal(NULL, N(1), t22);
@@ -2701,7 +2701,7 @@ static B F_indexof(B *e, B w, B x) {
   return t30;
   }
   b3:; {
-  if (w == NONE) goto b4;
+  if (is_none(w)) goto b4;
   B t31 = F_is(NULL, S2, x);
   B t32 = F_equal(NULL, NONE, w);
   B t33 = F_equal(NULL, N(1), t32);
@@ -2721,7 +2721,7 @@ static B F_indexof(B *e, B w, B x) {
   return t42;
   }
   b4:; {
-  if (w == NONE) goto b5;
+  if (is_none(w)) goto b5;
   B t43 = F_equal(NULL, NONE, w);
   B t44 = F_lesseq(NULL, N(1), t43);
   B t45 = p_assert(S33, t44);
@@ -2741,7 +2741,7 @@ static B F_indexof(B *e, B w, B x) {
   return t56;
   }
   b5:; {
-  if (w == NONE) goto b6;
+  if (is_none(w)) goto b6;
   B t57 = F_equal(NULL, NONE, w);
   B t58 = F_minus(NULL, t57, N(1));
   B v_c_9 = t58;
@@ -2763,7 +2763,7 @@ static B F_indexof(B *e, B w, B x) {
 static B F_member(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_equal(NULL, NONE, x);
   B t2 = F_lesseq(NULL, N(1), t1);
   B t3 = p_assert(S35, t2);
@@ -2774,7 +2774,7 @@ static B F_member(B *e, B w, B x) {
   return t7;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t8 = F_is(NULL, S4, w);
   B t9 = F_equal(NULL, NONE, x);
   B t10 = F_equal(NULL, N(1), t9);
@@ -2792,7 +2792,7 @@ static B F_member(B *e, B w, B x) {
   return t17;
   }
   b2:; {
-  if (w == NONE) goto b3;
+  if (is_none(w)) goto b3;
   B t18 = F_is(NULL, S3, w);
   B t19 = F_equal(NULL, NONE, x);
   B t20 = F_equal(NULL, N(1), t19);
@@ -2810,7 +2810,7 @@ static B F_member(B *e, B w, B x) {
   return t27;
   }
   b3:; {
-  if (w == NONE) goto b4;
+  if (is_none(w)) goto b4;
   B t28 = F_noteq(NULL, NONE, x);
   B t29 = F_indexof(NULL, x, w);
   B t30 = F_less(NULL, t29, t28);
@@ -2838,13 +2838,13 @@ static B L_16(B *e, B w, B x) {
 static B F_find(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_member(NULL, NONE, x);
   B t2 = F_replicate(NULL, t1, x);
   return t2;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t3 = F_equal(NULL, NONE, x);
   B t4 = F_equal(NULL, N(1), t3);
   B t5 = F_equal(NULL, NONE, w);
@@ -2886,7 +2886,7 @@ static B L_17(B *e, B w, B x) {
 static B F_group(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = F_equal(NULL, NONE, x);
   B t2 = F_equal(NULL, N(1), t1);
   B t3 = p_assert(S37, t2);
@@ -2896,7 +2896,7 @@ static B F_group(B *e, B w, B x) {
   return t6;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t7 = F_equal(NULL, NONE, w);
   B t8 = F_equal(NULL, N(1), t7);
   B t9 = p_assert(S38, t8);
@@ -2986,7 +2986,7 @@ static B F_fillcell(B *e, B w, B x) {
 static B M_rank(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = call(e[1], NONE, x);
   B t2 = F_reshape(NULL, NONE, t1);
   B v_l_1 = t2;
@@ -3015,7 +3015,7 @@ static B M_rank(B *e, B w, B x) {
   return t19;
   }
   b1:; {
-  if (w != NONE) goto b2;
+  if (!is_none(w)) goto b2;
   B t20 = call(e[1], NONE, x);
   B t21 = F_reshape(NULL, NONE, t20);
   B v_l_5 = t21;
@@ -3039,7 +3039,7 @@ static B M_rank(B *e, B w, B x) {
   return t34;
   }
   b2:; {
-  if (w == NONE) goto b3;
+  if (is_none(w)) goto b3;
   B t35 = call(e[1], w, x);
   B t36 = F_reshape(NULL, NONE, t35);
   B v_l_9 = t36;
@@ -3100,7 +3100,7 @@ static B M_rank(B *e, B w, B x) {
   return t77;
   }
   b3:; {
-  if (w == NONE) goto b4;
+  if (is_none(w)) goto b4;
   B t78 = call(e[1], w, x);
   B t79 = F_reshape(NULL, NONE, t78);
   B v_l_19 = t79;
@@ -3153,7 +3153,7 @@ static B MI_cells(B f0) {
 static B F_walk(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w == NONE) goto b1;
+  if (is_none(w)) goto b1;
   B t1 = b_ismarker(NONE, w);
   if (!truth(t1)) goto b1;
   B t2 = mk_list(1, (B[]){w});
@@ -3162,7 +3162,7 @@ static B F_walk(B *e, B w, B x) {
   return t4;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t5 = b_isarr(NONE, w);
   B t6 = b_eq(N(0), t5);
   if (!truth(t6)) goto b2;
@@ -3172,7 +3172,7 @@ static B F_walk(B *e, B w, B x) {
   return t9;
   }
   b2:; {
-  if (w == NONE) goto b3;
+  if (is_none(w)) goto b3;
   B t10 = F_shape(NULL, NONE, x);
   B t11 = F_shape(NULL, NONE, w);
   B t12 = F_match(NULL, t11, t10);
@@ -3227,14 +3227,14 @@ static B M_put(B *e, B w, B x) {
 static B M_under(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  if (w != NONE) goto b1;
+  if (!is_none(w)) goto b1;
   B t1 = call(e[1], NONE, x);
   B t2 = call(e[0], NONE, t1);
   B t3 = M_put((B[]){e[1]}, t2, x);
   return t3;
   }
   b1:; {
-  if (w == NONE) goto b2;
+  if (is_none(w)) goto b2;
   B t4 = call(e[1], NONE, x);
   B t5 = call(e[1], NONE, w);
   B t6 = call(e[0], t5, t4);
