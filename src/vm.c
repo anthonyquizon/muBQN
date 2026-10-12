@@ -4,7 +4,7 @@
 //   runtime      errors, values, heap objects, reference counts, reuse tokens
 //   functions    function objects, calls, and the combinators ∘ ○ ⊸ ⟜ ˜ ˙ ⊘ ◶ ⍟
 //   arrays       construction, element access, comparison
-//   basis        the operations of src/k.bqn, as b_x(w, x) and bm_x(f, w, x)
+//   basis        the operations of src/b.bqn, as b_x(w, x) and bm_x(f, w, x)
 //   generated    gen/prims.c, compiled from src/prims.bqn by src/c.bqn
 //   interpreter  milestone 4
 //   main         -DPRIM_TEST builds the differential test harness instead
@@ -326,7 +326,7 @@ static int cmp(B a, B b) {
 }
 
 // ======================================================================= basis
-// The operations of src/k.bqn, with the same contracts. Each checks its
+// The operations of src/b.bqn, with the same contracts. Each checks its
 // arguments and calls vm_error when they don't hold. w is NONE for monadic
 // calls. Results never share memory with arguments.
 
@@ -379,16 +379,16 @@ static B b_flat(B w, B x) { (void)w; return N(is_arr(x) && ptr(x)->rank == 1 && 
 static B fill_of(B v) {
   if (is_num(v)) return N(0);
   if (is_chr(v)) return C(' ');
-  if (!is_arr(v)) vm_error("k.Fill: no fill for this element");
+  if (!is_arr(v)) vm_error("b.Fill: no fill for this element");
   H *h = ptr(v), *r = new_arr(T_VAL, h->rank, shp(h));
   for (uint64_t i = 0; i < h->len; i++) vals(r)[i] = fill_of(elem(h, i));
   return squeeze(r);
 }
 static B b_fill(B w, B x) {
   (void)w;
-  H *h = need_list1(x, "k.Fill");
+  H *h = need_list1(x, "b.Fill");
   if (h->type == T_F64) return N(0);
-  if (!h->len) vm_error("k.Fill: an empty generic list has no known fill");
+  if (!h->len) vm_error("b.Fill: an empty generic list has no known fill");
   return fill_of(vals(h)[0]);
 }
 static B b_same(B w, B x) { return N(match(w, x)); }
@@ -396,33 +396,33 @@ static B b_match(B w, B x) { return N(match(w, x)); }
 
 // ---- construction
 static B b_reshape(B w, B x) {
-  H *s = need_list1(w, "k.Reshape"), *d = need_list1(x, "k.Reshape");
-  if (s->len > 255) vm_error("k.Reshape: rank too large");
+  H *s = need_list1(w, "b.Reshape"), *d = need_list1(x, "b.Reshape");
+  if (s->len > 255) vm_error("b.Reshape: rank too large");
   uint64_t shape[256], n = 1;
-  for (uint64_t i = 0; i < s->len; i++) { shape[i] = (uint64_t)nat(elem(s, i), "k.Reshape"); n *= shape[i]; }
-  if (n != d->len) vm_error("k.Reshape: 𝕩 must have exactly ×´𝕨 elements");
+  for (uint64_t i = 0; i < s->len; i++) { shape[i] = (uint64_t)nat(elem(s, i), "b.Reshape"); n *= shape[i]; }
+  if (n != d->len) vm_error("b.Reshape: 𝕩 must have exactly ×´𝕨 elements");
   H *r = new_arr(d->type, (uint8_t)s->len, shape);
   memcpy(vals(r), vals(d), n * 8);
   return mk_ptr(r);
 }
 static B b_deshape(B w, B x) {
   (void)w;
-  H *h = need_arr(x, "k.Deshape");
+  H *h = need_arr(x, "b.Deshape");
   return copy_list(h, 0, h->len);
 }
 static B b_range(B w, B x) {
   (void)w;
-  uint64_t n = (uint64_t)nat(x, "k.Range");
+  uint64_t n = (uint64_t)nat(x, "b.Range");
   H *r = new_list(T_F64, n);
   for (uint64_t i = 0; i < n; i++) f64s(r)[i] = (double)i;
   return mk_ptr(r);
 }
 static B b_cat(B w, B x) {
   (void)w;
-  H *h = need_list1(x, "k.Cat");
+  H *h = need_list1(x, "b.Cat");
   uint64_t n = 0; int all_f64 = 1;
   for (uint64_t i = 0; i < h->len; i++) {
-    H *p = need_list1(elem(h, i), "k.Cat");
+    H *p = need_list1(elem(h, i), "b.Cat");
     n += p->len; all_f64 &= p->type == T_F64;
   }
   H *r = new_list(all_f64 ? T_F64 : T_VAL, n);
@@ -438,9 +438,9 @@ static B b_cat(B w, B x) {
 }
 static B b_slice(B w, B x) {
   need_list(w, 2);
-  H *h = need_list1(x, "k.Slice");
-  uint64_t s = (uint64_t)nat(list_get(w, 0), "k.Slice"), l = (uint64_t)nat(list_get(w, 1), "k.Slice");
-  if (s + l > h->len) vm_error("k.Slice: out of range");
+  H *h = need_list1(x, "b.Slice");
+  uint64_t s = (uint64_t)nat(list_get(w, 0), "b.Slice"), l = (uint64_t)nat(list_get(w, 1), "b.Slice");
+  if (s + l > h->len) vm_error("b.Slice: out of range");
   return copy_list(h, s, l);
 }
 static uint64_t index_into(B i, uint64_t len, const char *who) {
@@ -450,8 +450,8 @@ static uint64_t index_into(B i, uint64_t len, const char *who) {
   return (uint64_t)(d < 0 ? d + (double)len : d);
 }
 static B b_pick(B w, B x) {
-  H *h = need_list1(x, "k.Pick");
-  return elem(h, index_into(w, h->len, "k.Pick"));
+  H *h = need_list1(x, "b.Pick");
+  return elem(h, index_into(w, h->len, "b.Pick"));
 }
 
 // ---- arithmetic on numbers and flat lists
@@ -478,9 +478,9 @@ static inline double op2(int op, double a, double b) {
 }
 static B arith(int op, B w, B x) {
   if (is_num(w) && is_num(x)) return N(op2(op, num(w), num(x)));
-  if (!(is_num(w) || is_flat(w)) || !(is_num(x) || is_flat(x))) vm_error("k: arithmetic on non-numbers");
+  if (!(is_num(w) || is_flat(w)) || !(is_num(x) || is_flat(x))) vm_error("b: arithmetic on non-numbers");
   uint64_t n = is_num(w) ? ptr(x)->len : ptr(w)->len;
-  if (!is_num(w) && !is_num(x) && ptr(x)->len != n) vm_error("k: length mismatch");
+  if (!is_num(w) && !is_num(x) && ptr(x)->len != n) vm_error("b: length mismatch");
   H *r = new_list(T_F64, n);
   double *d = f64s(r);
   for (uint64_t i = 0; i < n; i++) {
@@ -497,7 +497,7 @@ ARITH(lt, O_LT) ARITH(le, O_LE) ARITH(gt, O_GT) ARITH(ge, O_GE)
 #undef ARITH
 static B arith1(double (*f)(double), B x) {
   if (is_num(x)) return N(f(num(x)));
-  if (!is_flat(x)) vm_error("k: arithmetic on non-numbers");
+  if (!is_flat(x)) vm_error("b: arithmetic on non-numbers");
   H *h = ptr(x), *r = new_list(T_F64, h->len);
   for (uint64_t i = 0; i < h->len; i++) f64s(r)[i] = f(num(elem(h, i)));
   return mk_ptr(r);
@@ -513,7 +513,7 @@ static H *need_flat(B x, const char *who) {
 #define FOLD(name, init, OP)                                                   \
   static B b_##name(B w, B x) {                                                \
     (void)w;                                                                   \
-    H *h = need_flat(x, "k." #name);                                           \
+    H *h = need_flat(x, "b." #name);                                           \
     if (!h->len) return N(init);                                               \
     double a = num(elem(h, h->len - 1));                                       \
     for (uint64_t i = h->len - 1; i-- > 0;) { double b = num(elem(h, i)); a = OP; } \
@@ -525,7 +525,7 @@ FOLD(foldmax, -INFINITY, (b > a ? b : a))
 FOLD(foldmin, INFINITY, (b < a ? b : a))
 #undef FOLD
 static B scan(int max, B x) {
-  H *h = need_flat(x, "k.Scan"), *r = new_list(T_F64, h->len);
+  H *h = need_flat(x, "b.Scan"), *r = new_list(T_F64, h->len);
   for (uint64_t i = 0; i < h->len; i++) {
     double b = num(elem(h, i));
     f64s(r)[i] = i == 0 ? b : max ? (f64s(r)[i-1] > b ? f64s(r)[i-1] : b) : f64s(r)[i-1] + b;
@@ -537,32 +537,32 @@ static B b_scanmax(B w, B x) { (void)w; return scan(1, x); }
 
 // ---- selection
 static B b_gather(B w, B x) {
-  if (!is_flat(w)) vm_error("k.Gather: 𝕨 must be a flat list");
-  H *ix = ptr(w), *s = need_list1(x, "k.Gather"), *r = new_list(s->type, ix->len);
+  if (!is_flat(w)) vm_error("b.Gather: 𝕨 must be a flat list");
+  H *ix = ptr(w), *s = need_list1(x, "b.Gather"), *r = new_list(s->type, ix->len);
   for (uint64_t i = 0; i < ix->len; i++)
-    vals(r)[i] = vals(s)[index_into(elem(ix, i), s->len, "k.Gather")];
+    vals(r)[i] = vals(s)[index_into(elem(ix, i), s->len, "b.Gather")];
   return mk_ptr(r);
 }
 static B b_scatter(B w, B x) {
   need_list(w, 2);
   B iv = list_get(w, 0), vv = list_get(w, 1);
-  H *s = need_list1(x, "k.Scatter");
-  if (!is_flat(iv)) vm_error("k.Scatter: indices must be a flat list");
-  H *ix = ptr(iv), *v = need_list1(vv, "k.Scatter");
-  if (ix->len != v->len) vm_error("k.Scatter: indices and values must have equal length");
+  H *s = need_list1(x, "b.Scatter");
+  if (!is_flat(iv)) vm_error("b.Scatter: indices must be a flat list");
+  H *ix = ptr(iv), *v = need_list1(vv, "b.Scatter");
+  if (ix->len != v->len) vm_error("b.Scatter: indices and values must have equal length");
   H *r = new_list(T_VAL, s->len);
   for (uint64_t i = 0; i < s->len; i++) vals(r)[i] = elem(s, i);
   for (uint64_t i = 0; i < ix->len; i++)
-    vals(r)[index_into(elem(ix, i), s->len, "k.Scatter")] = elem(v, i);
+    vals(r)[index_into(elem(ix, i), s->len, "b.Scatter")] = elem(v, i);
   return squeeze(r);
 }
 static B b_compress(B w, B x) {
-  H *b = need_flat(w, "k.Compress"), *s = need_list1(x, "k.Compress");
-  if (b->len != s->len) vm_error("k.Compress: 𝕩 must be a list as long as 𝕨");
+  H *b = need_flat(w, "b.Compress"), *s = need_list1(x, "b.Compress");
+  if (b->len != s->len) vm_error("b.Compress: 𝕩 must be a list as long as 𝕨");
   uint64_t n = 0;
   for (uint64_t i = 0; i < b->len; i++) {
     double d = num(elem(b, i));
-    if (d != 0 && d != 1) vm_error("k.Compress: 𝕨 must be boolean");
+    if (d != 0 && d != 1) vm_error("b.Compress: 𝕨 must be boolean");
     n += d == 1;
   }
   H *r = new_list(s->type, n);
@@ -571,9 +571,9 @@ static B b_compress(B w, B x) {
 }
 static B b_indices(B w, B x) {
   (void)w;
-  H *c = need_flat(x, "k.Indices");
+  H *c = need_flat(x, "b.Indices");
   uint64_t n = 0;
-  for (uint64_t i = 0; i < c->len; i++) n += (uint64_t)nat(elem(c, i), "k.Indices");
+  for (uint64_t i = 0; i < c->len; i++) n += (uint64_t)nat(elem(c, i), "b.Indices");
   H *r = new_list(T_F64, n);
   for (uint64_t i = 0, k = 0; i < c->len; i++)
     for (uint64_t j = (uint64_t)num(elem(c, i)); j--;) f64s(r)[k++] = (double)i;
@@ -594,7 +594,7 @@ static void merge_sort(uint64_t *ix, uint64_t *tmp, uint64_t n, H *h) {
 }
 static B b_grade(B w, B x) {
   (void)w;
-  H *h = need_list1(x, "k.Grade");
+  H *h = need_list1(x, "b.Grade");
   uint64_t *ix = malloc(h->len * 8 + 1), *tmp = malloc(h->len * 8 + 1);
   for (uint64_t i = 0; i < h->len; i++) ix[i] = i;
   merge_sort(ix, tmp, h->len, h);
@@ -604,7 +604,7 @@ static B b_grade(B w, B x) {
   return mk_ptr(r);
 }
 static B b_indexof(B w, B x) {
-  H *a = need_list1(w, "k.IndexOf"), *b = need_list1(x, "k.IndexOf");
+  H *a = need_list1(w, "b.IndexOf"), *b = need_list1(x, "b.IndexOf");
   H *r = new_list(T_F64, b->len);
   for (uint64_t i = 0; i < b->len; i++) {
     uint64_t j = 0;
@@ -615,12 +615,12 @@ static B b_indexof(B w, B x) {
   return mk_ptr(r);
 }
 static B b_hist(B w, B x) {
-  uint64_t n = (uint64_t)nat(w, "k.Hist");
-  H *c = need_flat(x, "k.Hist"), *r = new_list(T_F64, n);
+  uint64_t n = (uint64_t)nat(w, "b.Hist");
+  H *c = need_flat(x, "b.Hist"), *r = new_list(T_F64, n);
   for (uint64_t i = 0; i < n; i++) f64s(r)[i] = 0;
   for (uint64_t i = 0; i < c->len; i++) {
-    double d = nat(elem(c, i), "k.Hist");
-    if (d >= (double)n) vm_error("k.Hist: values must be below 𝕨");
+    double d = nat(elem(c, i), "b.Hist");
+    if (d >= (double)n) vm_error("b.Hist: values must be below 𝕨");
     f64s(r)[(uint64_t)d]++;
   }
   return mk_ptr(r);
@@ -628,24 +628,24 @@ static B b_hist(B w, B x) {
 
 // ---- callbacks
 static B bm_each(B f, B w, B x) {
-  H *b = need_list1(x, "k._each");
-  H *a = is_none(w) ? NULL : need_list1(w, "k._each");
-  if (a && a->len != b->len) vm_error("k._each: 𝕨 and 𝕩 must have equal length");
+  H *b = need_list1(x, "b._each");
+  H *a = is_none(w) ? NULL : need_list1(w, "b._each");
+  if (a && a->len != b->len) vm_error("b._each: 𝕨 and 𝕩 must have equal length");
   H *r = new_list(T_VAL, b->len);
   for (uint64_t i = 0; i < b->len; i++) vals(r)[i] = call(f, a ? elem(a, i) : NONE, elem(b, i));
   return squeeze(r);
 }
 static B bm_fold(B f, B w, B x) {
-  H *h = need_list1(x, "k._fold");
+  H *h = need_list1(x, "b._fold");
   uint64_t n = h->len;
-  if (is_none(w) && !n) vm_error("k._fold: empty 𝕩 needs 𝕨");
+  if (is_none(w) && !n) vm_error("b._fold: empty 𝕩 needs 𝕨");
   B a = is_none(w) ? elem(h, --n) : w;
   while (n--) a = call(f, elem(h, n), a);
   return a;
 }
 static B bm_scan(B f, B w, B x) {
   (void)w;
-  H *h = need_list1(x, "k._scan"), *r = new_list(T_VAL, h->len);
+  H *h = need_list1(x, "b._scan"), *r = new_list(T_VAL, h->len);
   for (uint64_t i = 0; i < h->len; i++)
     vals(r)[i] = i == 0 ? elem(h, 0) : call(f, vals(r)[i-1], elem(h, i));
   return squeeze(r);
@@ -654,7 +654,7 @@ static B bm_scan(B f, B w, B x) {
 // ---- markers: opaque values that match only themselves, for ⌾
 static B b_markers(B w, B x) {
   (void)w;
-  uint64_t n = (uint64_t)nat(x, "k.Markers");
+  uint64_t n = (uint64_t)nat(x, "b.Markers");
   H *r = new_list(T_VAL, n);
   for (uint64_t i = 0; i < n; i++) vals(r)[i] = mk_ptr(h_alloc(T_MARK, 0, 0));
   return mk_ptr(r);
@@ -665,13 +665,13 @@ static B b_ismarker(B w, B x) { (void)w; return N(is_type(x, T_MARK)); }
 // "plain", which is always correct, and the constructors build plain lists.
 static B S_plain;
 static B b_enc(B w, B x) { (void)w; (void)x; return S_plain; }
-static B b_parts(B w, B x) { (void)w; (void)x; vm_error("k.Parts: the list is not encoded"); }
+static B b_parts(B w, B x) { (void)w; (void)x; vm_error("b.Parts: the list is not encoded"); }
 static B b_sorted(B w, B x) { (void)w; (void)x; return N(0); }
 static B b_mkconst(B w, B x) {
   (void)w;
   need_list(x, 2);
   B v = list_get(x, 0);
-  uint64_t n = (uint64_t)nat(list_get(x, 1), "k.MkConst");
+  uint64_t n = (uint64_t)nat(list_get(x, 1), "b.MkConst");
   H *r = new_list(T_VAL, n);
   for (uint64_t i = 0; i < n; i++) vals(r)[i] = v;
   return squeeze(r);
@@ -680,9 +680,9 @@ static B b_mkrange(B w, B x) {
   (void)w;
   need_list(x, 3);
   B s = list_get(x, 0), d = list_get(x, 1);
-  if (!is_int(s) || !is_int(d)) vm_error("k.MkRange: s and d must be integers");
-  uint64_t n = (uint64_t)nat(list_get(x, 2), "k.MkRange");
-  if (n && !is_int(N(num(s) + num(d) * (double)(n - 1)))) vm_error("k.MkRange: elements must stay integers");
+  if (!is_int(s) || !is_int(d)) vm_error("b.MkRange: s and d must be integers");
+  uint64_t n = (uint64_t)nat(list_get(x, 2), "b.MkRange");
+  if (n && !is_int(N(num(s) + num(d) * (double)(n - 1)))) vm_error("b.MkRange: elements must stay integers");
   H *r = new_list(T_F64, n);
   for (uint64_t i = 0; i < n; i++) f64s(r)[i] = num(s) + num(d) * (double)i;
   return mk_ptr(r);
@@ -690,12 +690,12 @@ static B b_mkrange(B w, B x) {
 static B b_mkruns(B w, B x) {
   (void)w;
   need_list(x, 2);
-  H *v = need_list1(list_get(x, 0), "k.MkRuns"), *c = need_flat(list_get(x, 1), "k.MkRuns");
-  if (v->len != c->len) vm_error("k.MkRuns: v and c must have equal length");
+  H *v = need_list1(list_get(x, 0), "b.MkRuns"), *c = need_flat(list_get(x, 1), "b.MkRuns");
+  if (v->len != c->len) vm_error("b.MkRuns: v and c must have equal length");
   uint64_t n = 0;
   for (uint64_t i = 0; i < c->len; i++) {
-    double k = nat(elem(c, i), "k.MkRuns");
-    if (k < 1) vm_error("k.MkRuns: counts must be at least 1");
+    double k = nat(elem(c, i), "b.MkRuns");
+    if (k < 1) vm_error("b.MkRuns: counts must be at least 1");
     n += (uint64_t)k;
   }
   H *r = new_list(v->type, n);
@@ -707,11 +707,11 @@ static B b_mkdict(B w, B x) {
   (void)w;
   need_list(x, 2);
   B c = list_get(x, 0), d = list_get(x, 1);
-  need_list1(d, "k.MkDict");
-  if (!is_flat(c)) vm_error("k.MkDict: codes must be a flat list");
+  need_list1(d, "b.MkDict");
+  if (!is_flat(c)) vm_error("b.MkDict: codes must be a flat list");
   for (uint64_t i = 0; i < ptr(c)->len; i++) {
-    double k = nat(elem(ptr(c), i), "k.MkDict");
-    if (k >= (double)ptr(d)->len) vm_error("k.MkDict: codes must index d");
+    double k = nat(elem(ptr(c), i), "b.MkDict");
+    if (k >= (double)ptr(d)->len) vm_error("b.MkDict: codes must index d");
   }
   return b_gather(c, d);
 }

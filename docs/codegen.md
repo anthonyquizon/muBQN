@@ -31,8 +31,8 @@ g_reverse = fn_static(F_reverse);
 
 | Dialect source | Generated C | Defined in |
 |---|---|---|
-| `k.Sub`, `k.Len`, `k.Reshape`, … | `b_sub`, `b_len`, `b_reshape`, … | `vm.c`, basis section |
-| `k._each`, `k._fold`, `k._scan` | `bm_each`, `bm_fold`, `bm_scan` | `vm.c`, basis section |
+| `b.Sub`, `b.Len`, `b.Reshape`, … | `b_sub`, `b_len`, `b_reshape`, … | `vm.c`, basis section |
+| `b._each`, `b._fold`, `b._scan` | `bm_each`, `bm_fold`, `bm_scan` | `vm.c`, basis section |
 | An earlier dialect definition (`RankOf`, `SelCells`) | `F_rankof(...)`, `F_selcells(...)` | `gen/prims.c` |
 | `𝕊` | A recursive call, e.g. `F_reverse(...)` | `gen/prims.c` |
 | Trains and `∘ ○ ⊸ ⟜ ˜ ˙ ⊘ ◶ ⍟` | `mk_fn(D_fork, …)`, `mk_fn(D_after, …)`, … | `vm.c`, functions section |
@@ -52,9 +52,9 @@ The general case of `Reverse` in `prims.bqn`, the fifth of its header cases:
 
 ```bqn
   𝕊 𝕩:
-    "⌽: 𝕩 must have rank at least 1" ! 0 k.Lt RankOf 𝕩
-    n ← k.Len 𝕩
-    (k.Shape 𝕩) k.Reshape ((n k.Sub 1) k.Sub k.Range n) SelCells 𝕩 ;
+    "⌽: 𝕩 must have rank at least 1" ! 0 b.Lt RankOf 𝕩
+    n ← b.Len 𝕩
+    (b.Shape 𝕩) b.Reshape ((n b.Sub 1) b.Sub b.Range n) SelCells 𝕩 ;
 ```
 
 becomes section `b4` of `F_reverse`:
@@ -63,16 +63,16 @@ becomes section `b4` of `F_reverse`:
   b4:; {
   if (!is_none(w)) goto b5;               // header "𝕊 𝕩": monadic only, else try the next case
   B t28 = F_rankof(NULL, NONE, x);        // RankOf 𝕩   → another generated function
-  B t29 = b_lt(N(0), t28);                // 0 k.Lt …   → basis
+  B t29 = b_lt(N(0), t28);                // 0 b.Lt …   → basis
   B t30 = p_assert(S13, t29);             // "…" ! …    → S13 is the message string constant
-  B t31 = b_len(NONE, x);                 // n ← k.Len 𝕩
+  B t31 = b_len(NONE, x);                 // n ← b.Len 𝕩
   B v_n_8 = t31;
-  B t32 = b_range(NONE, v_n_8);           // k.Range n   (right to left, so this comes first)
-  B t33 = b_sub(v_n_8, N(1));             // n k.Sub 1
-  B t34 = b_sub(t33, t32);                // (n-1) k.Sub range
+  B t32 = b_range(NONE, v_n_8);           // b.Range n   (right to left, so this comes first)
+  B t33 = b_sub(v_n_8, N(1));             // n b.Sub 1
+  B t34 = b_sub(t33, t32);                // (n-1) b.Sub range
   B t35 = F_selcells(NULL, t34, x);       // … SelCells 𝕩 → generated
-  B t36 = b_shape(NONE, x);               // k.Shape 𝕩
-  B t37 = b_reshape(t36, t35);            // k.Reshape
+  B t36 = b_shape(NONE, x);               // b.Shape 𝕩
+  B t37 = b_reshape(t36, t35);            // b.Reshape
   return t37;
   }
 ```
@@ -83,30 +83,30 @@ becomes section `b4` of `F_reverse`:
 - **Every intermediate is named** (`t28`, `t29`, …), in BQN's right-to-left
   evaluation order. This ANF form is where the compiler will insert `dup` and
   `drop` once reference counting is on.
-- **`𝕊` is a direct call.** The `runs` case, `k.MkRuns ⟨𝕊 v, 𝕊 c⟩`, becomes
+- **`𝕊` is a direct call.** The `runs` case, `b.MkRuns ⟨𝕊 v, 𝕊 c⟩`, becomes
   `F_reverse(NULL, NONE, v_v_4)` and `F_reverse(NULL, NONE, v_c_5)`.
 
 ## Example 2: a train and a modifier (AllNum)
 
 ```bqn
-AllNum ← {1 k.Min k.FoldMin (1 k.Eq k.Type) k._each Els 𝕩}
+AllNum ← {1 b.Min b.FoldMin (1 b.Eq b.Type) b._each Els 𝕩}
 ```
 
 ```c
 static B F_allnum(B *e, B w, B x) {
   b0:; {
   B t1 = F_els(NULL, NONE, x);                         // Els 𝕩
-  B t2 = mk_fn(D_fork, 3, N(1), KV_eq, KV_type);       // (1 k.Eq k.Type), a 3-train
-  B t3 = bm_each(t2, NONE, t1);                        // k._each
-  B t4 = b_foldmin(NONE, t3);                          // k.FoldMin
-  B t5 = b_min(N(1), t4);                              // 1 k.Min …
+  B t2 = mk_fn(D_fork, 3, N(1), KV_eq, KV_type);       // (1 b.Eq b.Type), a 3-train
+  B t3 = bm_each(t2, NONE, t1);                        // b._each
+  B t4 = b_foldmin(NONE, t3);                          // b.FoldMin
+  B t5 = b_min(N(1), t4);                              // 1 b.Min …
   return t5;
   }
   b1:; return vm_nomatch();
 }
 ```
 
-The train `(1 k.Eq k.Type)` isn't called directly. It is built as a function
+The train `(1 b.Eq b.Type)` isn't called directly. It is built as a function
 object with `mk_fn(D_fork, …)`, whose parts are the number `1` and the basis
 operations wrapped as function values (`KV_eq`, `KV_type`). `bm_each` calls
 that object on each element through `call()`, which runs `D_fork` from the

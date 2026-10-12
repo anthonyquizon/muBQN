@@ -14,7 +14,7 @@ cases ← 200 Arg 0
 g ← (1 Arg 1) •Import "gen.bqn"
 
 d ← •Import "../src/dialect.bqn"
-k ← •Import "../src/k.bqn"
+b ← •Import "../src/b.bqn"
 n ← ≠g.tests
 list ← "testList ⇐ ⟨"∾(1↓∾{",T"∾•Fmt 𝕩}¨ ↕n)∾"⟩"∾@+10
 p ← "prims.bqn" d.LoadSrc (•FChars "../src/prims.bqn") ∾ (g.Defs @) ∾ list
@@ -22,5 +22,5 @@ p ← "prims.bqn" d.LoadSrc (•FChars "../src/prims.bqn") ∾ (g.Defs @) ∾ li
 args ← g.Cases cases
 res ← {𝕊 ours‿src‿as: theirs ← •BQN src ⋄ {⟨g.Try ours‿𝕩, g.Try theirs‿𝕩⟩}¨ as}¨ <˘⍉> p.testList ‿ (1⊑¨g.tests) ‿ args
 bad ← args g.Report res
-•Out "encoded paths: " ∾ ∾ ´ {" "∾𝕨∾" "∾•Fmt 𝕩}¨´ k.Stats @
+•Out "encoded paths: " ∾ ∾ ´ {" "∾𝕨∾" "∾•Fmt 𝕩}¨´ b.Stats @
 •Exit 0 < bad

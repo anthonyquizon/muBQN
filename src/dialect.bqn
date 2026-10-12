@@ -6,7 +6,7 @@
 # line structure, so error line numbers still match.
 #
 #   Check src       → rewritten source; errors name the line and glyph
-#   Load file       → namespace of src/file, run on CBQN with k.bqn as •args
+#   Load file       → namespace of src/file, run on CBQN with b.bqn as •args
 #   name LoadSrc s  → the same for source text s
 
 # ---- glyphs. Each one has a fixed name; the case and underscores give the
@@ -94,11 +94,11 @@ Check ⇐ {
 
 # name LoadSrc src: like Load, for source text; name names the output file
 LoadSrc ⇐ {
-  k ← •Import "k.bqn"
+  b ← •Import "b.bqn"
   dir ← •path∾"/../build"
   •file.CreateDir⍟(¬•file.Exists) dir
   out ← dir∾"/"∾𝕨∾".gen.bqn"
   out •FChars Check 𝕩
-  k •Import out
+  b •Import out
 }
 Load ⇐ {𝕩 LoadSrc •FChars •path∾"/"∾𝕩}

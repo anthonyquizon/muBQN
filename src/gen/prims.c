@@ -108,38 +108,38 @@ static B S42;
 static B S43;
 static B S44;
 static B S45;
-static B KV_eq;
-static B KV_type;
-static B KV_mul;
-static B KV_sub;
-static B KV_add;
-static B KV_div;
-static B KV_floor;
-static B KV_min;
-static B KV_max;
-static B KV_abs;
-static B KV_mod;
-static B KV_ne;
-static B KV_lt;
-static B KV_gt;
-static B KV_le;
-static B KV_ge;
-static B KF_eq(B *e, B w, B x) { (void)e; return b_eq(w, x); }
-static B KF_type(B *e, B w, B x) { (void)e; return b_type(w, x); }
-static B KF_mul(B *e, B w, B x) { (void)e; return b_mul(w, x); }
-static B KF_sub(B *e, B w, B x) { (void)e; return b_sub(w, x); }
-static B KF_add(B *e, B w, B x) { (void)e; return b_add(w, x); }
-static B KF_div(B *e, B w, B x) { (void)e; return b_div(w, x); }
-static B KF_floor(B *e, B w, B x) { (void)e; return b_floor(w, x); }
-static B KF_min(B *e, B w, B x) { (void)e; return b_min(w, x); }
-static B KF_max(B *e, B w, B x) { (void)e; return b_max(w, x); }
-static B KF_abs(B *e, B w, B x) { (void)e; return b_abs(w, x); }
-static B KF_mod(B *e, B w, B x) { (void)e; return b_mod(w, x); }
-static B KF_ne(B *e, B w, B x) { (void)e; return b_ne(w, x); }
-static B KF_lt(B *e, B w, B x) { (void)e; return b_lt(w, x); }
-static B KF_gt(B *e, B w, B x) { (void)e; return b_gt(w, x); }
-static B KF_le(B *e, B w, B x) { (void)e; return b_le(w, x); }
-static B KF_ge(B *e, B w, B x) { (void)e; return b_ge(w, x); }
+static B BV_eq;
+static B BV_type;
+static B BV_mul;
+static B BV_sub;
+static B BV_add;
+static B BV_div;
+static B BV_floor;
+static B BV_min;
+static B BV_max;
+static B BV_abs;
+static B BV_mod;
+static B BV_ne;
+static B BV_lt;
+static B BV_gt;
+static B BV_le;
+static B BV_ge;
+static B BF_eq(B *e, B w, B x) { (void)e; return b_eq(w, x); }
+static B BF_type(B *e, B w, B x) { (void)e; return b_type(w, x); }
+static B BF_mul(B *e, B w, B x) { (void)e; return b_mul(w, x); }
+static B BF_sub(B *e, B w, B x) { (void)e; return b_sub(w, x); }
+static B BF_add(B *e, B w, B x) { (void)e; return b_add(w, x); }
+static B BF_div(B *e, B w, B x) { (void)e; return b_div(w, x); }
+static B BF_floor(B *e, B w, B x) { (void)e; return b_floor(w, x); }
+static B BF_min(B *e, B w, B x) { (void)e; return b_min(w, x); }
+static B BF_max(B *e, B w, B x) { (void)e; return b_max(w, x); }
+static B BF_abs(B *e, B w, B x) { (void)e; return b_abs(w, x); }
+static B BF_mod(B *e, B w, B x) { (void)e; return b_mod(w, x); }
+static B BF_ne(B *e, B w, B x) { (void)e; return b_ne(w, x); }
+static B BF_lt(B *e, B w, B x) { (void)e; return b_lt(w, x); }
+static B BF_gt(B *e, B w, B x) { (void)e; return b_gt(w, x); }
+static B BF_le(B *e, B w, B x) { (void)e; return b_le(w, x); }
+static B BF_ge(B *e, B w, B x) { (void)e; return b_ge(w, x); }
 static B F_els(B *e, B w, B x);
 static B F_lst(B *e, B w, B x);
 static B F_rankof(B *e, B w, B x);
@@ -325,7 +325,7 @@ static B F_allnum(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
   B t1 = F_els(NULL, NONE, x);
-  B t2 = mk_fn(D_fork, 3, N(1), KV_eq, KV_type);
+  B t2 = mk_fn(D_fork, 3, N(1), BV_eq, BV_type);
   B t3 = bm_each(t2, NONE, t1);
   B t4 = b_foldmin(NONE, t3);
   B t5 = b_min(N(1), t4);
@@ -613,10 +613,10 @@ static B F_intlist(B *e, B w, B x) {
 static B F_affine(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
-  B t1 = b_same(x, KV_mul);
-  B t2 = b_same(x, KV_sub);
+  B t1 = b_same(x, BV_mul);
+  B t2 = b_same(x, BV_sub);
   B t3 = b_max(t2, t1);
-  B t4 = b_same(x, KV_add);
+  B t4 = b_same(x, BV_add);
   B t5 = b_max(t4, t3);
   return t5;
   }
@@ -1523,7 +1523,7 @@ static B F_plus(B *e, B w, B x) {
   }
   b1:; {
   if (is_none(w)) goto b2;
-  B t2 = M_p2((B[]){KV_add}, w, x);
+  B t2 = M_p2((B[]){BV_add}, w, x);
   return t2;
   }
   b2:; return vm_nomatch();
@@ -1539,7 +1539,7 @@ static B F_minus(B *e, B w, B x) {
   }
   b1:; {
   if (is_none(w)) goto b2;
-  B t2 = M_p2((B[]){KV_sub}, w, x);
+  B t2 = M_p2((B[]){BV_sub}, w, x);
   return t2;
   }
   b2:; return vm_nomatch();
@@ -1568,7 +1568,7 @@ static B F_times(B *e, B w, B x) {
   }
   b1:; {
   if (is_none(w)) goto b2;
-  B t3 = M_p2((B[]){KV_mul}, w, x);
+  B t3 = M_p2((B[]){BV_mul}, w, x);
   return t3;
   }
   b2:; return vm_nomatch();
@@ -1584,7 +1584,7 @@ static B F_divide(B *e, B w, B x) {
   }
   b1:; {
   if (is_none(w)) goto b2;
-  B t2 = M_p2((B[]){KV_div}, w, x);
+  B t2 = M_p2((B[]){BV_div}, w, x);
   return t2;
   }
   b2:; return vm_nomatch();
@@ -1595,12 +1595,12 @@ static B F_floor(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
   if (!is_none(w)) goto b1;
-  B t1 = M_p1((B[]){KV_floor}, NONE, x);
+  B t1 = M_p1((B[]){BV_floor}, NONE, x);
   return t1;
   }
   b1:; {
   if (is_none(w)) goto b2;
-  B t2 = M_p2((B[]){KV_min}, w, x);
+  B t2 = M_p2((B[]){BV_min}, w, x);
   return t2;
   }
   b2:; return vm_nomatch();
@@ -1618,7 +1618,7 @@ static B F_ceil(B *e, B w, B x) {
   }
   b1:; {
   if (is_none(w)) goto b2;
-  B t4 = M_p2((B[]){KV_max}, w, x);
+  B t4 = M_p2((B[]){BV_max}, w, x);
   return t4;
   }
   b2:; return vm_nomatch();
@@ -1629,12 +1629,12 @@ static B F_abs(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
   if (!is_none(w)) goto b1;
-  B t1 = M_p1((B[]){KV_abs}, NONE, x);
+  B t1 = M_p1((B[]){BV_abs}, NONE, x);
   return t1;
   }
   b1:; {
   if (is_none(w)) goto b2;
-  B t2 = M_p2((B[]){KV_mod}, w, x);
+  B t2 = M_p2((B[]){BV_mod}, w, x);
   return t2;
   }
   b2:; return vm_nomatch();
@@ -1667,7 +1667,7 @@ static B F_equal(B *e, B w, B x) {
   }
   b1:; {
   if (is_none(w)) goto b2;
-  B t2 = M_p2((B[]){KV_eq}, w, x);
+  B t2 = M_p2((B[]){BV_eq}, w, x);
   return t2;
   }
   b2:; return vm_nomatch();
@@ -1683,7 +1683,7 @@ static B F_noteq(B *e, B w, B x) {
   }
   b1:; {
   if (is_none(w)) goto b2;
-  B t2 = M_p2((B[]){KV_ne}, w, x);
+  B t2 = M_p2((B[]){BV_ne}, w, x);
   return t2;
   }
   b2:; return vm_nomatch();
@@ -1700,7 +1700,7 @@ static B F_less(B *e, B w, B x) {
   }
   b1:; {
   if (is_none(w)) goto b2;
-  B t3 = M_p2((B[]){KV_lt}, w, x);
+  B t3 = M_p2((B[]){BV_lt}, w, x);
   return t3;
   }
   b2:; return vm_nomatch();
@@ -1716,7 +1716,7 @@ static B F_greater(B *e, B w, B x) {
   }
   b1:; {
   if (is_none(w)) goto b2;
-  B t2 = M_p2((B[]){KV_gt}, w, x);
+  B t2 = M_p2((B[]){BV_gt}, w, x);
   return t2;
   }
   b2:; return vm_nomatch();
@@ -1727,7 +1727,7 @@ static B F_lesseq(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
   if (is_none(w)) goto b1;
-  B t1 = M_p2((B[]){KV_le}, w, x);
+  B t1 = M_p2((B[]){BV_le}, w, x);
   return t1;
   }
   b1:; return vm_nomatch();
@@ -1738,7 +1738,7 @@ static B F_greatereq(B *e, B w, B x) {
   (void)e; (void)w; (void)x;
   b0:; {
   if (is_none(w)) goto b1;
-  B t1 = M_p2((B[]){KV_ge}, w, x);
+  B t1 = M_p2((B[]){BV_ge}, w, x);
   return t1;
   }
   b1:; return vm_nomatch();
@@ -3292,22 +3292,22 @@ static void gen_init(void) {
   S43 = str_lit((const uint32_t[]){9022, 58, 32, 120125, 32, 99, 104, 97, 110, 103, 101, 100, 32, 97, 32, 118, 97, 108, 117, 101, 32, 116, 104, 97, 116, 32, 120126, 32, 99, 114, 101, 97, 116, 101, 100, 0}, 35);
   S44 = str_lit((const uint32_t[]){9022, 58, 32, 120125, 32, 109, 117, 115, 116, 32, 110, 111, 116, 32, 99, 104, 97, 110, 103, 101, 32, 116, 104, 101, 32, 115, 104, 97, 112, 101, 32, 111, 102, 32, 120126, 39, 115, 32, 114, 101, 115, 117, 108, 116, 0}, 44);
   S45 = str_lit((const uint32_t[]){9022, 58, 32, 111, 110, 108, 121, 32, 97, 110, 32, 97, 114, 114, 97, 121, 32, 120169, 32, 105, 115, 32, 115, 117, 112, 112, 111, 114, 116, 101, 100, 0}, 31);
-  KV_eq = fn_static(KF_eq);
-  KV_type = fn_static(KF_type);
-  KV_mul = fn_static(KF_mul);
-  KV_sub = fn_static(KF_sub);
-  KV_add = fn_static(KF_add);
-  KV_div = fn_static(KF_div);
-  KV_floor = fn_static(KF_floor);
-  KV_min = fn_static(KF_min);
-  KV_max = fn_static(KF_max);
-  KV_abs = fn_static(KF_abs);
-  KV_mod = fn_static(KF_mod);
-  KV_ne = fn_static(KF_ne);
-  KV_lt = fn_static(KF_lt);
-  KV_gt = fn_static(KF_gt);
-  KV_le = fn_static(KF_le);
-  KV_ge = fn_static(KF_ge);
+  BV_eq = fn_static(BF_eq);
+  BV_type = fn_static(BF_type);
+  BV_mul = fn_static(BF_mul);
+  BV_sub = fn_static(BF_sub);
+  BV_add = fn_static(BF_add);
+  BV_div = fn_static(BF_div);
+  BV_floor = fn_static(BF_floor);
+  BV_min = fn_static(BF_min);
+  BV_max = fn_static(BF_max);
+  BV_abs = fn_static(BF_abs);
+  BV_mod = fn_static(BF_mod);
+  BV_ne = fn_static(BF_ne);
+  BV_lt = fn_static(BF_lt);
+  BV_gt = fn_static(BF_gt);
+  BV_le = fn_static(BF_le);
+  BV_ge = fn_static(BF_ge);
   g_els = fn_static(F_els);
   g_lst = fn_static(F_lst);
   g_rankof = fn_static(F_rankof);

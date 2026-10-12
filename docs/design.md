@@ -243,9 +243,9 @@ There is also a sorted flag, like kdb+'s `s#`.
   are plain lists. Every basis operation accepts any encoding and decodes what
   it doesn't handle, so correctness never depends on a fast path.
 - **The compressed-data algorithms are dialect code.** A primitive asks
-  `k.Enc` how a list is stored, takes `k.Parts`, and builds results with
-  `k.MkConst`, `k.MkRange`, `k.MkRuns` and `k.MkDict`. For example,
-  `𝕨∊𝕩` on a dict searches only the dictionary: `k.MkDict ⟨c, d∊𝕩⟩`.
+  `b.Enc` how a list is stored, takes `b.Parts`, and builds results with
+  `b.MkConst`, `b.MkRange`, `b.MkRuns` and `b.MkDict`. For example,
+  `𝕨∊𝕩` on a dict searches only the dictionary: `b.MkDict ⟨c, d∊𝕩⟩`.
 - **Encodings mostly come from primitives, not from scanning data.** `↕n`
   is a range, `n⥊x` is a const, and `/` with long runs is runs. A
   dictionary is kept through `⊏`, `/`, `⌽` and arithmetic with an atom.
@@ -337,12 +337,12 @@ the dispatch loop.
 - Local definitions, trains, and flat closures over immutable values.
 - `!` for errors.
 - `↩` only on locals that no closure captures.
-- Basis operations `k.Name` (below).
+- Basis operations `b.Name` (below).
 
 ### Excluded
 
-- Namespaces and `•Import`, apart from the basis namespace `k`.
-- `•` system values, apart from `•args` to bind `k`.
+- Namespaces and `•Import`, apart from the basis namespace `b`.
+- `•` system values, apart from `•args` to bind `b`.
 - Functions stored in arrays, or other first-class functions used as data.
 - `⎊`.
 
@@ -354,15 +354,15 @@ the dispatch loop.
 - Each glyph has a fixed name (`⌽` is `Reverse`, `¨` is `_each`), and a dialect
   file defines a glyph by exporting that name: `Reverse ⇐ {…}`. One definition
   covers both valences.
-- The **basis** is a namespace `k`, bound at the top of the file with
-  `k ← •args`. Basis operations are called by name, e.g. `k.Gather`. They match
+- The **basis** is a namespace `b`, bound at the top of the file with
+  `b ← •args`. Basis operations are called by name, e.g. `b.Gather`. They match
   the `b_*` functions in `vm.c`: value-level, with lists only, and with a fixed
   ownership convention.
 - A few glyphs are **pass-through**: the compiler handles them directly, and they
   keep their BQN meaning. They are the combinators `∘ ○ ⊸ ⟜ ˜ ˙ ⊘ ◶ ⊢ ⊣`, plus
   `!` and `⍟`.
 
-`src/k.bqn` defines the basis in BQN, checking each operation's contract, for
+`src/b.bqn` defines the basis in BQN, checking each operation's contract, for
 example that arguments are lists. It is both the specification of the basis and
 a reference to test the C kernels against.
 
@@ -373,17 +373,17 @@ plus basis operations and pass-through glyphs. Using its own glyph is also
 rejected, since recursion goes through `𝕊`.
 
 ```bqn
-Reverse ⇐ {n←k.Len 𝕩 ⋄ (n-1+↕n)⊏𝕩}   # needs - + ↕ ⊏ defined above; using ⌽ is rejected
+Reverse ⇐ {n←b.Len 𝕩 ⋄ (n-1+↕n)⊏𝕩}   # needs - + ↕ ⊏ defined above; using ⌽ is rejected
 ```
 
 `src/dialect.bqn` checks the rule. It rewrites each glyph to its name, so the
-checked source runs on CBQN with `src/k.bqn` as the basis. This is the
+checked source runs on CBQN with `src/b.bqn` as the basis. This is the
 front end the compiler will later share.
 
 ### Specialization
 
 - A primitive is specialized only on **element type at entry**. A predicate on
-  `k.Type` splits it into one C body per type, with at most one per native type.
+  `b.Type` splits it into one C body per type, with at most one per native type.
 - Dyadic primitives promote both arguments to a common type rather than
   generating every type pair.
 - A modifier is monomorphized only for **primitive** operands: `+´` gets its own
@@ -420,7 +420,7 @@ Ordered by risk: the least proven parts come first.
    them against CBQN's built-ins on random inputs. This tests whether the basis
    and the dependency rule can express BQN.
    **Result (first round).** `src/prims.bqn` (376 lines) defines 43 glyphs
-   over 48 basis operations in `src/k.bqn`. `test/prims.bqn` runs 90 tests
+   over 48 basis operations in `src/b.bqn`. `test/prims.bqn` runs 90 tests
    (primitives, valences and derived functions) on random arguments against
    CBQN. At 500 cases each there are 0 mismatches. The gaps are the
    unsupported features listed at the top of `prims.bqn`, plus the two below
@@ -430,19 +430,19 @@ Ordered by risk: the least proven parts come first.
      on rank ≥ 2 (one call per cell, since cells are compared as boxed
      arrays) and for `↕` on a list. Candidate native kernels: list search, and
      hashing and comparison of rows.
-   - **Fills** come from `k.Fill`, which relies on CBQN tracking fills. The C
+   - **Fills** come from `b.Fill`, which relies on CBQN tracking fills. The C
      runtime has to store or derive a fill for generic arrays. `≡` ignores
      fills, so the tests do not check them yet.
    - **`⎉` with an empty frame** applies 𝔽 to a cell of fills to find the
      result shape. CBQN catches an error there and carries on, which the
-     dialect can't do without `⎊`. Either add a basis `k._try` or accept the
+     dialect can't do without `⎊`. Either add a basis `b._try` or accept the
      gap.
    - **Structural `⌾`** works by applying 𝔾 to an array of opaque markers
-     (`k.Markers`). The runtime needs a marker type, and computational under
+     (`b.Markers`). The runtime needs a marker type, and computational under
      is a separate piece of work.
-   - **Fast paths don't change results.** `k.Flat` returns 0 at random a
+   - **Fast paths don't change results.** `b.Flat` returns 0 at random a
      quarter of the time, and the tests still pass. Operand identity
-     (`𝕗 k.Same plus`) selects fast paths and fold identities; the compiler
+     (`𝕗 b.Same plus`) selects fast paths and fold identities; the compiler
      must resolve it statically.
    - **The dialect needs two checks.** BQN names ignore case and underscores,
      so a local `els` silently shadowed the helper `Els`; the checker should
@@ -450,11 +450,11 @@ Ordered by risk: the least proven parts come first.
      scope, so case splits recompute their setup (see `_rank_`); the compiler
      should share that work, or the dialect needs a statement-level
      conditional.
-   - `k.Compress` went unused: indices plus gather cover boolean `/`.
+   - `b.Compress` went unused: indices plus gather cover boolean `/`.
      Compress becomes an optimization kernel rather than a required one.
-0b. **Encodings spike on CBQN.** Done. `src/k.bqn` stores every list plain, so
-   `k.Enc` claims a random encoding from those the list could have, and
-   `k.Parts` uses each encoding's full freedom: shuffled dictionaries with
+0b. **Encodings spike on CBQN.** Done. `src/b.bqn` stores every list plain, so
+   `b.Enc` claims a random encoding from those the list could have, and
+   `b.Parts` uses each encoding's full freedom: shuffled dictionaries with
    repeats and unused entries, split runs, and any step for a one-element
    range. Encoded paths cover `+ - ×` and the other elementwise operations
    with an atom, monadic arithmetic, `+´ ⌈´`, `⊏` (including a range of
@@ -472,7 +472,7 @@ Ordered by risk: the least proven parts come first.
    (`test/gen.bqn`) on the compiled C. Result: 0 mismatches at 500 cases per
    test. Calls to top-level definitions, basis operations, `𝕊` and modifiers
    applied on the spot are direct C calls; local blocks are flat closures.
-   Still to do: monomorphization (fold `k.Same`, and so `+´`, when the operand
+   Still to do: monomorphization (fold `b.Same`, and so `+´`, when the operand
    is known, and drop dead bodies), and a type split resolved at compile time.
    Dialect rules this turned up:
    - A `𝕨` header (`𝕨 𝕊 𝕩:`) is dyadic only. In BQN it also matches a monadic
