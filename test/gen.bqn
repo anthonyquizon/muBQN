@@ -152,6 +152,35 @@ Defs ⇐ {𝕤
   (@+10) ∾ ∾ (↕≠tests) D¨ 1⊑¨tests
 }
 
+# ---- wire format of the C harnesses (src/vm.c PRIM_TEST, test/hand_main.c)
+FmtN ← {𝕩≠𝕩 ? "nan" ; 𝕩=∞ ? "inf" ; 𝕩=-∞ ? "-inf" ; {𝕩='¯' ? '-' ; 𝕩}¨ •Repr 𝕩}
+Ser ⇐ {
+  𝕊 v: 1=•Type v ? "n"∾FmtN v ;
+  𝕊 v: 2=•Type v ? "c"∾•Fmt v-@ ;
+  𝕊 v: 0=•Type v ? "a "∾(•Fmt =v)∾(∾' '⊸∾¨•Fmt¨≢v)∾∾(' '∾Ser)¨⥊v ;
+  𝕊 v: "can't serialize this value" ! 0
+}
+ParseN ← {𝕩≡"nan" ? 0÷0 ; 𝕩≡"inf" ? ∞ ; 𝕩≡"-inf" ? -∞ ; •ParseFloat 𝕩}
+De ← {   # one value from a line of tokens
+  ts ← 1↓¨ (¯1++`' '=s) ⊔ s ← ' '∾𝕩 ⋄ i ← 0
+  Next ← {𝕤 ⋄ i +↩ 1 ⋄ (i-1)⊑ts}
+  P ← {𝕤
+    t ← Next@
+    {
+      'n' = ⊑t ? ParseN 1↓t ;
+      'c' = ⊑t ? @ + •ParseFloat 1↓t ;
+      'a' = ⊑t ? r ← •ParseFloat Next@ ⋄ s ← {𝕤 ⋄ •ParseFloat Next@}¨ ↕r ⋄ s ⥊ P¨ ↕×´s ;
+      ⟨"unknown", t⟩
+    }
+  }
+  P @
+}
+Result ⇐ {   # a line of output → ⟨1, value⟩ or ⟨0, message⟩
+  "ok " ≡ 3↑𝕩 ? ⟨1, De 3↓𝕩⟩ ;
+  "err " ≡ 4↑𝕩 ? ⟨0, 4↓𝕩⟩ ;
+  ⟨0, "harness: "∾𝕩⟩
+}
+
 # ---- running and reporting
 Run ⇐ {𝕊 f‿a: 1=≠a ? F ⊑a ; 𝕊 f‿a: (⊑a) F 1⊑a}
 Try ⇐ {⟨1, Run 𝕩⟩}⎊{𝕊: ⟨0, •CurrentError @⟩}
@@ -182,7 +211,9 @@ Cases ⇐ {n ← 𝕩 ⋄ {𝕊 name‿src‿gen: Gen¨ n⥊@}¨ tests}
 # results Report args: prints a line per test (and examples of failures),
 # then the totals; returns the number of mismatches. results holds, per
 # test and case, ⟨ours, theirs⟩ as Try returns them.
-Report ⇐ {
+# ReportFor is Report over a subset ts of the tests.
+Report ⇐ {tests ReportFor 𝕨‿𝕩}
+ReportFor ⇐ {ts 𝕊 args‿results:
   total ← 0‿0‿0‿0
   {𝕊 ⟨name, src, gen⟩‿args‿res:
     rs ← args {⟨Outcome 𝕩, 𝕨⟩ ∾ 𝕩}¨ res
@@ -191,7 +222,7 @@ Report ⇐ {
     total +↩ n
     •Out (14↑name) ∾ ∾ (0<n) / n {"  "∾(•Fmt 𝕨)∾" "∾𝕩}¨ kinds
     {𝕊 kind: •Out∘Example¨ (2⌊≠)⊸↑ (ks ≡¨ <kind) / rs}¨ 1↓kinds
-  }¨ <˘⍉> tests‿𝕨‿𝕩
+  }¨ <˘⍉> ts‿args‿results
   •Out ""
   •Out "total" ∾ ∾ total {"  "∾(•Fmt 𝕨)∾" "∾𝕩}¨ kinds
   1⊑total

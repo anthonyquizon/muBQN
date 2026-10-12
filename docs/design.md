@@ -265,9 +265,14 @@ BQN runtime.
 - Kernels are plain C functions such as `(dst, a, b, n)` that know nothing about
   BQN arrays. The C generated from the primitive dialect checks types and `rc`,
   then calls a kernel.
-- We write our own small `.singeli` files using the Singeli standard includes
-  (`skin/c`, `arch/c`, `util/for`). CBQN's `src/singeli/src/` is a reference
-  only, not vendored, since it is tied to CBQN's headers and build.
+- We vendor CBQN's `src/singeli/src/` (under MPL2) instead of writing our own
+  kernels. The kernels take raw pointers. Their only CBQN dependencies come
+  through `cbqnDefs.singeli`, and `src/singeli/muDefs.singeli` replaces it,
+  keeping the same names. The C side of those names is
+  `src/singeli/si_prelude.h`. CBQN's C dispatch (`src/builtins/*.c`) is not
+  vendored. It is rewritten against our `H` header in the primitive dialect.
+- Most kernels need narrow element types (bit, i8, i16, i32). Only the f64
+  paths apply until milestone 2 adds those types.
 - One target architecture (NEON on Apple Silicon) plus a scalar fallback.
 - Elementwise kernels must be correct when `dst == src`, so they work with
   `drop_reuse`.
@@ -393,6 +398,8 @@ front end the compiler will later share.
   primitives.
 - The generated C is **checked in**, so building `vm.c` needs only a C
   compiler. CBQN is needed only to work on the compiler.
+- [codegen.md](codegen.md) walks through the generated C for an example
+  primitive and shows which parts of `vm.c` it calls.
 - Test primitives three ways: compiled to C, run on CBQN, and fuzzed on random
   inputs.
 
