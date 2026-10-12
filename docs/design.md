@@ -257,6 +257,20 @@ There is also a sorted flag, like kdb+'s `s#`.
 - **Runtime cost.** An encoding tag in the header, parts as reference-counted
   children (so arrays can share one dictionary), and one decode function per
   encoding.
+- **Not chunked.** Column stores split a list into chunks, each with its own
+  encoding, so that one irregular value only spoils its chunk. That matters
+  when encodings are chosen by scanning data. Here they come from
+  primitives and cover the whole list, and `↑`/`↓` work on every encoding
+  without chunks. Chunks would cost a lot: `𝕨+𝕩` on two chunked lists must
+  line up their boundaries, scans and `⍷ ⊐ ∊ ⍋` cross boundaries, float folds
+  must carry the accumulator from chunk to chunk to keep rounding exact, and
+  small arrays pay dispatch per chunk. If a benchmark shows `∾` decoding
+  encoded lists, or large data gets read in by scanning, chunks get added as
+  one more encoding, cat `⟨l₀, l₁, …⟩` meaning `∾` of the parts, each of
+  which may be encoded. Basis operations decode it like any other encoding,
+  `Parts` tests it by splitting lists at random points, and primitives
+  handle it one at a time: elementwise functions map over the parts, `∾`
+  builds a cat, and folds pass the running result as `𝕨`.
 
 ### Lists only in the basis
 

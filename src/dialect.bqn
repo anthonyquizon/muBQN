@@ -54,6 +54,7 @@ CodeMask ← {
 # ---- definitions: a line that starts in column 0 with a name followed by
 # ← or ⇐ begins a new definition. Returns the name, or "" for other lines.
 identChars ← "_"∾('a'+↕26)∾('A'+↕26)∾'0'+↕10
+Norm ← {(𝕩≠'_') / 𝕩 + 32×(𝕩≥'A')∧𝕩≤'Z'}   # BQN ignores case and underscores
 LineDef ← {
   w ← ⊑(𝕩 ∊ "←⇐")⊐1
   lhs ← (' '⊸≠/⊢) w↑𝕩
@@ -77,6 +78,18 @@ Check ⇐ {
     (At "⎊ is not allowed in the dialect") ! ¬∨´mask ∧ line ∊ excluded
     sys ← /mask ∧ '•'=line
     (At "• is only allowed as •args") ! ∧´{"args"≡4↑(𝕩+1)↓line}¨ sys
+    # b is the basis everywhere. BQN ignores case and underscores, so a local
+    # B, _b or 𝕊 b: would hide it on CBQN while the compiler still emits a
+    # basis call. Outside the binding, b may only appear as b.Name.
+    t ← mask ∧ line ∊ identChars
+    st ← t > »t
+    toks ← (¯1 + t × +`st) ⊔ line
+    prev ← (»line) /˜ st
+    next ← {⊑(' '⊸≠/⊢)(𝕩↓line)∾nl}¨ 1 + / t > «t
+    isB ← {"b" ≡ Norm 𝕩}¨ toks
+    binding ← "b←•args" ≡ (mask ∧ ¬line ∊ " "∾nl)/line
+    hides ← isB ∧ ('.'≠prev) ∧ ('.'≠next) ∧ ¬binding
+    {𝕤 ⋄ (At (⊑hides/toks)∾" names the basis b; use another name") ! 0}⍟(∨´hides) @
     used ← mask ∧ line ∊ glyphs
     u ← used/line
     nm ← gnames ⊏˜ glyphs ⊐ u
