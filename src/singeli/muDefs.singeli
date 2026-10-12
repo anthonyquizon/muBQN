@@ -4,7 +4,7 @@
 # Derived from CBQN (dzaima and contributors), used under MPL2.
 # Every emitted C name is defined in si_prelude.h.
 
-# ---- boxed values (cmp.singeli only). x is a muBQN V passed as u64.
+# ---- boxed values (cmp.singeli only). x is a muBQN B passed as u64.
 def bcall{T, f, x} = emit{T, f, x}
 def from_B{T, x if T==f64} = bcall{T, 'si_o2f', x}
 def from_B{T, x if T<=i32 and   issigned{T}} = bcall{T, 'si_o2i', x}
@@ -23,7 +23,7 @@ def q_fint{T, x:(f64) if isint{T}} = {
 }
 
 # ---- tags. Only the char tag is read by kernels (copy, squeeze), as the top
-# 16 bits of a V. The other CBQN tags are left undefined on purpose: a kernel
+# 16 bits of a B. The other CBQN tags are left undefined on purpose: a kernel
 # that needs one fails to compile instead of silently using wrong bits.
 def cbqn_c32Tag{} = emit{u64, '', 'SI_C32_TAG'}
 

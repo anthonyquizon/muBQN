@@ -42,7 +42,7 @@ g_reverse = fn_static(F_reverse);
 | Destructuring, list literals, `?` | `need_list`, `list_get`, `mk_list`, `truth` | `vm.c`, arrays section |
 | String literals | `S0`, `S1`, … static constants | `gen/prims.c` |
 
-Every generated function has the signature `V F_name(V *e, V w, V x)`. `w`
+Every generated function has the signature `B F_name(B *e, B w, B x)`. `w`
 is `NONE` for a monadic call, and `e` is the environment, which top-level
 definitions don't use.
 
@@ -62,17 +62,17 @@ becomes section `b4` of `F_reverse`:
 ```c
   b4:; {
   if (w != NONE) goto b5;                 // header "𝕊 𝕩": monadic only, else try the next case
-  V t28 = F_rankof(NULL, NONE, x);        // RankOf 𝕩   → another generated function
-  V t29 = b_lt(N(0), t28);                // 0 k.Lt …   → basis
-  V t30 = p_assert(S13, t29);             // "…" ! …    → S13 is the message string constant
-  V t31 = b_len(NONE, x);                 // n ← k.Len 𝕩
-  V v_n_8 = t31;
-  V t32 = b_range(NONE, v_n_8);           // k.Range n   (right to left, so this comes first)
-  V t33 = b_sub(v_n_8, N(1));             // n k.Sub 1
-  V t34 = b_sub(t33, t32);                // (n-1) k.Sub range
-  V t35 = F_selcells(NULL, t34, x);       // … SelCells 𝕩 → generated
-  V t36 = b_shape(NONE, x);               // k.Shape 𝕩
-  V t37 = b_reshape(t36, t35);            // k.Reshape
+  B t28 = F_rankof(NULL, NONE, x);        // RankOf 𝕩   → another generated function
+  B t29 = b_lt(N(0), t28);                // 0 k.Lt …   → basis
+  B t30 = p_assert(S13, t29);             // "…" ! …    → S13 is the message string constant
+  B t31 = b_len(NONE, x);                 // n ← k.Len 𝕩
+  B v_n_8 = t31;
+  B t32 = b_range(NONE, v_n_8);           // k.Range n   (right to left, so this comes first)
+  B t33 = b_sub(v_n_8, N(1));             // n k.Sub 1
+  B t34 = b_sub(t33, t32);                // (n-1) k.Sub range
+  B t35 = F_selcells(NULL, t34, x);       // … SelCells 𝕩 → generated
+  B t36 = b_shape(NONE, x);               // k.Shape 𝕩
+  B t37 = b_reshape(t36, t35);            // k.Reshape
   return t37;
   }
 ```
@@ -93,13 +93,13 @@ AllNum ← {1 k.Min k.FoldMin (1 k.Eq k.Type) k._each Els 𝕩}
 ```
 
 ```c
-static V F_allnum(V *e, V w, V x) {
+static B F_allnum(B *e, B w, B x) {
   b0:; {
-  V t1 = F_els(NULL, NONE, x);                         // Els 𝕩
-  V t2 = mk_fn(D_fork, 3, N(1), KV_eq, KV_type);       // (1 k.Eq k.Type), a 3-train
-  V t3 = bm_each(t2, NONE, t1);                        // k._each
-  V t4 = b_foldmin(NONE, t3);                          // k.FoldMin
-  V t5 = b_min(N(1), t4);                              // 1 k.Min …
+  B t1 = F_els(NULL, NONE, x);                         // Els 𝕩
+  B t2 = mk_fn(D_fork, 3, N(1), KV_eq, KV_type);       // (1 k.Eq k.Type), a 3-train
+  B t3 = bm_each(t2, NONE, t1);                        // k._each
+  B t4 = b_foldmin(NONE, t3);                          // k.FoldMin
+  B t5 = b_min(N(1), t4);                              // 1 k.Min …
   return t5;
   }
   b1:; return vm_nomatch();

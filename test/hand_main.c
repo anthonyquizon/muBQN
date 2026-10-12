@@ -3,13 +3,13 @@
 // API, so vm.aq.c can keep its own names for everything else.
 //
 // vm.aq.c must provide:
-//   V, is_num(v), num(v), mk_num(d), is_chr(v), chr(v), mk_chr(c), NONE
-//   V t_mkarr(uint8_t rank, const uint64_t *shape, V *elems)
+//   B, is_num(v), num(v), mk_num(d), is_chr(v), chr(v), mk_chr(c), NONE
+//   B t_mkarr(uint8_t rank, const uint64_t *shape, B *elems)
 //       a new array holding elems, which it takes ownership of
-//   int t_isarr(V v); uint8_t t_rank(V a); const uint64_t *t_shape(V a);
-//   uint64_t t_len(V a); V t_get(V a, uint64_t i)    (borrowed, not dup'd)
-//   void v_drop(V v)
-//   V t_call(const char *src, V w, V x)
+//   int t_isarr(B v); uint8_t t_rank(B a); const uint64_t *t_shape(B a);
+//   uint64_t t_len(B a); B t_get(B a, uint64_t i)    (borrowed, not dup'd)
+//   void v_drop(B v)
+//   B t_call(const char *src, B w, B x)
 //       run the primitive spelled src (such as "+" or "+´") on w and x,
 //       which it consumes; w is NONE when called monadically
 //   long t_live(void)   heap objects currently allocated (0 until you count)
@@ -47,7 +47,7 @@ static void put(Buf *b, const char *s) {
   memcpy(b->p + b->n, s, k + 1);
   b->n += k;
 }
-static void ser(Buf *b, V v) {
+static void ser(Buf *b, B v) {
   char t[64];
   if (is_num(v)) { snprintf(t, sizeof t, "n%.17g", num(v)); put(b, t); }
   else if (is_chr(v)) { snprintf(t, sizeof t, "c%u", (unsigned)chr(v)); put(b, t); }
@@ -70,7 +70,7 @@ static char *tok(void) {
   if (*tok_p) *tok_p++ = 0;
   return s;
 }
-static V deser(void) {
+static B deser(void) {
   char *t = tok();
   if (t[0] == 'n') return mk_num(strtod(t + 1, NULL));
   if (t[0] == 'c') return mk_chr((uint32_t)strtoul(t + 1, NULL, 10));
@@ -78,9 +78,9 @@ static V deser(void) {
   int rank = atoi(tok());
   uint64_t shape[256], len = 1;
   for (int i = 0; i < rank; i++) len *= shape[i] = strtoull(tok(), NULL, 10);
-  V *elems = malloc((len ? len : 1) * sizeof(V));
+  B *elems = malloc((len ? len : 1) * sizeof(B));
   for (uint64_t i = 0; i < len; i++) elems[i] = deser();
-  V a = t_mkarr((uint8_t)rank, shape, elems);
+  B a = t_mkarr((uint8_t)rank, shape, elems);
   free(elems);
   return a;
 }
@@ -97,9 +97,9 @@ int main(void) {
     tok_p = line;
     char *src = tok();
     int nargs = atoi(tok());
-    V x = deser(), w = NONE;
+    B x = deser(), w = NONE;
     if (nargs == 2) { w = x; x = deser(); }
-    V r = t_call(src, w, x);
+    B r = t_call(src, w, x);
     Buf b = {0};
     ser(&b, r);
     v_drop(r);

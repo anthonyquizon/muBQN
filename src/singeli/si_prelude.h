@@ -1,7 +1,7 @@
 // C definitions for the names that vendored CBQN Singeli kernels emit.
 // muDefs.singeli covers the CBQN-specific names. The rest come from base,
 // f64, cmp, bits, hashtab, select and fold.
-// Include after vm.c's value definitions (V, H, TAG_CHR) and before any
+// Include after vm.c's value definitions (B, H, TAG_CHR) and before any
 // generated kernel file.
 // Derived from CBQN's src/utils/includeSingeli.h (dzaima and contributors),
 // used under MPL2.
@@ -25,7 +25,7 @@ typedef double f64;
 #define si_fatal(MSG) (fprintf(stderr, "singeli: %s\n", MSG), abort())
 static inline f64 interp_f64(u64 x) { f64 r; memcpy(&r, &x, 8); return r; }
 
-// ---- boxed values (muDefs bcall). x is a V.
+// ---- boxed values (muDefs bcall). x is a B.
 static inline bool si_q_f64(u64 x) { return is_num(x); }
 static inline bool si_q_c32(u64 x) { return is_chr(x); }
 static inline bool si_q_c8 (u64 x) { return is_chr(x) && chr(x) < 0x100; }
